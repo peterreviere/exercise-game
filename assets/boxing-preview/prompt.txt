@@ -1,0 +1,4 @@
+Generated with built-in ImageGen.
+Reference images: robot-motion/public/robot/preview.png (character identity) and robot-motion/public/robot/preview_flying.png (render style).
+
+Use case: stylized-concept. Create a game selection preview image for Boxing Beat matching these reference 3D product renders. Image 1 is the exact friendly blue robot character identity reference; image 2 is the matching game thumbnail render style reference. Show the same cute blue and white robot with cyan eyes, antenna and rounded head, posed in a friendly boxing guard wearing padded blue boxing gloves, full body visible, three-quarter front view. Simple neutral gray studio backdrop and floor, soft shadows, glossy blue and white plastic, gentle studio lighting. Centered subject with generous cropping-safe space. Square composition. No text, no logos, no interface, no wings. Save the finished image as a local file and return its path.

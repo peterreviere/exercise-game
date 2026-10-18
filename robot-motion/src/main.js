@@ -72,6 +72,10 @@ function getStoredPreference(key) {
 // State Management
 // ============================================================================
 let activeCardIndex = 0;
+let roundComplete = false;
+let practiceDeadline = 0;
+let gameCountdownTimer = null;
+let gameCountdownActive = false;
 let currentView = 'carousel'; // 'carousel' | 'details' | 'game'
 let postureMode = 'standing'; // Standing mode only
 let gripThreshold = Number(getStoredPreference('adaptmove_grip') || 0.32);
@@ -289,6 +293,7 @@ function renderFlightUI() {
 }
 
 function showFlightEndScreen(result) {
+  roundComplete = true;
   let best = result.score;
   try {
     best = Math.max(result.score, Number(localStorage.getItem('robot-skyway-best')) || 0);
@@ -518,6 +523,7 @@ function triggerSparks(pos, colorHex = 0xffc74f) {
 }
 
 // Comet Trail
+let trailIndex = 0;
 const trailCount = 20;
 const trailPositions = new Float32Array(trailCount * 3);
 const trailGeo = new THREE.BufferGeometry();
@@ -564,8 +570,18 @@ const stretchingState = {
   moves: 0,
 };
 
-let stretchingLastStepAt = 0;
-let stretchingPrevStepMetrics = { left: false, right: false };
+const ROUTE = [
+  [-4.7, 1.18, 2.5], [-2.2, 1.95, -.2], [.2, 2.7, -2.55],
+  [-1, 3.4, -5], [1.8, 3.95, -6.9], [4.7, 2.05, -8.6],
+].map(position => new THREE.Vector3(...position));
+let robotGoal = null;
+let energyCore = null;
+Object.assign(stretchingState, {
+  screen: 'playing', profile: 'standard', range: 1, mode: 'camera',
+  paused: false, gestureDwell: 0, previousMetrics: {}, lastMovement: -Infinity,
+  latestImage: null, launchMoves: 0,
+});
+const keysDown = new Set();
 
 function prepareStretchObject(root, isCollectible = false) {
   root.traverse((object) => {
@@ -603,18 +619,8 @@ function cloneProp(name, position, scale = 1) {
   return activeProp;
 }
 
-function spawnWingPart() {
-  const target = PART_TARGETS[stretchingState.part];
-  if (!target) return;
-  cloneProp(`Collectible_Wing_${stretchingState.part + 1}`, target.world, 1.05);
-  itemAuraGroup.position.set(...target.world);
-  itemAuraGroup.visible = true;
-  socketBeacon.visible = false;
-  trailMat.opacity = 0;
-  renderStretchingUI();
-}
-
 function showStretchingEndScreen() {
+  roundComplete = true;
   stretchingState.phase = 'complete';
   soundEffects.playComplete();
   status('Launch sequence ready! Moshi is fully calibrated and prepped.');
@@ -627,192 +633,405 @@ function hideStretchingEndScreen() {
   if (el) el.hidden = true;
 }
 
-function initStretchingSection(secIndex) {
-  stretchingState.section = secIndex;
-  stretchingState.hold = 0;
+function setInstruction(icon, text, badge = 'REQUIRED ACTION') {
+  setHold(0);
+  $('stretching-instruction-icon').textContent = icon;
+  $('stretching-instruction-text').textContent = text;
+  $('stretching-instruction-badge').textContent = badge;
+}
+function setProgress(label, value) {
+  $('stretching-progress-text').textContent = label;
+  $('stretching-progress-fill').style.width = `${Math.min(1, value) * 100}%`;
+}
+function setHold(value, label = '') {
+  $('stretching-hold').classList.toggle('hidden', !['assemble', 'charge'].includes(stretchingState.phase));
+  $('stretching-hold-fill').style.width = `${value * 100}%`;
+  $('stretching-hold-text').textContent = label;
+}
+function showToast(text) { status(text); }
+function attachItemAura(position) {
+  itemAuraGroup.position.set(...position);
+  itemAuraGroup.visible = true;
+}
+function renderStretchingUI() {
+  $('stretching-chapter-badge').textContent = `SECTOR 0${stretchingState.section + 1}`;
+  $('stretching-chapter-title').textContent = CHAPTERS[stretchingState.section].name;
+}
+function initStretchingSection(index) {
+  soundEffects.stopHoldHum();
   hideStretchingEndScreen();
-  stretchingEnvironments.forEach((env, idx) => {
-    env.visible = idx === secIndex;
+  clearActiveProp();
+  if (energyCore) { stretchingGroup.remove(energyCore); energyCore = null; }
+  Object.assign(stretchingState, {
+    section: index, screen: 'playing', phase: ['collect', 'select', 'march'][index],
+    hold: 0, gestureDwell: 0, previousMetrics: {}, lastMovement: -Infinity,
+    grabbedWrist: null, squatBaseline: null, latestImage: null,
+    stepReady: false, neutralTime: 0, sideHold: 0, squatHold: 0,
   });
-  if (secIndex === 0) {
-    stretchingState.phase = 'collect';
+  itemAuraGroup.visible = false;
+  socketBeacon.visible = false;
+  trailMat.opacity = 0;
+  stretchingEnvironments.forEach((env, i) => { env.visible = i === index; });
+  playerStage.position.set(0, 0, 0);
+  playerStage.rotation.set(0, 0, 0);
+  pedestal.position.set(0, .02, 0);
+  robotGoal = null;
+  if (index === 0) {
+    stretchingState.moves = 0;
     stretchingState.part = 0;
-    stretchingState.grabbedWrist = null;
     if (attachedWings) attachedWings.visible = false;
+    camera.position.set(0, 3.8, 14.8);
+    camera.lookAt(0, 1.7, 0);
     spawnWingPart();
-  } else if (secIndex === 1) {
+  } else if (index === 1) {
     stretchingState.cell = 0;
-    clearActiveProp();
-    itemAuraGroup.visible = false;
-  } else if (secIndex === 2) {
+    camera.position.set(0, 4.2, 15.2);
+    camera.lookAt(0, 1.9, 0);
+    spawnPowerCell();
+  } else {
     stretchingState.steps = 0;
-    stretchingState.phase = 'march';
-    stretchingLastStepAt = 0;
-    stretchingPrevStepMetrics = { left: false, right: false };
-    clearActiveProp();
-    itemAuraGroup.visible = false;
+    stretchingState.launchMoves = 0;
+    playerStage.position.copy(ROUTE[0]);
+    playerStage.rotation.y = Math.PI;
+    robotGoal = ROUTE[0].clone();
+    pedestal.position.copy(ROUTE[0]).setY(ROUTE[0].y - .02);
+    camera.position.set(-3.8, 6.2, 13.8);
+    camera.lookAt(.4, 2.2, -3.5);
+    spawnCore();
+    updateMarchUI();
   }
+  camera.updateProjectionMatrix();
+  setHold(0);
   renderStretchingUI();
 }
+function finishSection(index) {
+  soundEffects.stopHoldHum();
+  soundEffects.playComplete();
+  initStretchingSection(index + 1);
+}
+function finishGame() {
+  soundEffects.stopHoldHum();
+  stretchingState.screen = 'ending';
+  setHold(0);
+  clearActiveProp();
+  itemAuraGroup.visible = false;
+  socketBeacon.visible = false;
+  $('stretching-end-result').textContent = `All 3 sectors cleared · ${stretchingState.moves} movements completed`;
+  showStretchingEndScreen();
+}
+function updateStretchingMotion(lm, worldLm, dt, now) {
+  stretchingState.latestImage = lm;
+}
 
-function renderStretchingUI() {
-  const chapter = CHAPTERS[stretchingState.section] || CHAPTERS[0];
-  if ($('stretching-chapter-badge')) $('stretching-chapter-badge').textContent = `SECTOR 0${stretchingState.section + 1}`;
-  if ($('stretching-chapter-title')) $('stretching-chapter-title').textContent = chapter.name;
-  if ($('stretching-instruction-icon')) $('stretching-instruction-icon').textContent = chapter.icon;
+function spawnWingPart() {
+  const target = PART_TARGETS[stretchingState.part];
+  cloneProp(`Collectible_Wing_${stretchingState.part + 1}`, target.world, 1.05);
+  attachItemAura(target.world, 0xffaa44, 0x58eaff);
+  socketBeacon.visible = false;
+  trailMat.opacity = 0;
+  setInstruction(target.key === 'ArrowUp' ? '↑' : target.x < .5 ? '←' : '→', target.label, 'REACH FOR WING');
+  setProgress(`${stretchingState.part} / 6 parts collected`, stretchingState.part / 6);
+}
 
-  if (stretchingState.section === 0) {
-    if (stretchingState.phase === 'collect') {
-      const target = PART_TARGETS[stretchingState.part];
-      if ($('stretching-progress-text')) $('stretching-progress-text').textContent = `${stretchingState.part} / 6 PARTS`;
-      if ($('stretching-progress-fill')) $('stretching-progress-fill').style.width = `${(stretchingState.part / 6) * 100}%`;
-      if ($('stretching-instruction-badge')) $('stretching-instruction-badge').textContent = stretchingState.grabbedWrist !== null ? 'DELIVER WING' : 'REACH FOR WING';
-      if ($('stretching-instruction-text')) $('stretching-instruction-text').textContent = stretchingState.grabbedWrist !== null ? 'Bring the wing part into Moshi’s back socket' : `Reach toward the glowing ${target?.label || 'part'}`;
-      if ($('stretching-hold')) $('stretching-hold').classList.add('hidden');
-    } else if (stretchingState.phase === 'assemble') {
-      if ($('stretching-progress-text')) $('stretching-progress-text').textContent = 'CALIBRATING WINGS';
-      if ($('stretching-progress-fill')) $('stretching-progress-fill').style.width = '100%';
-      if ($('stretching-instruction-badge')) $('stretching-instruction-badge').textContent = 'LOCK WINGSPAN';
-      if ($('stretching-instruction-text')) $('stretching-instruction-text').textContent = 'Hold arms wide to lock wings';
-      if ($('stretching-hold')) $('stretching-hold').classList.remove('hidden');
-      if ($('stretching-hold-fill')) $('stretching-hold-fill').style.width = `${Math.min(100, (stretchingState.hold / 1.5) * 100)}%`;
-      if ($('stretching-hold-text')) $('stretching-hold-text').textContent = 'Hold arms wide to lock wings';
-    }
-  } else if (stretchingState.section === 1) {
-    if ($('stretching-progress-text')) $('stretching-progress-text').textContent = `${stretchingState.cell} / 4 POWER CELLS`;
-    if ($('stretching-progress-fill')) $('stretching-progress-fill').style.width = `${(stretchingState.cell / 4) * 100}%`;
-    if ($('stretching-instruction-badge')) $('stretching-instruction-badge').textContent = 'LEAN & ALIGN';
-    if ($('stretching-instruction-text')) $('stretching-instruction-text').textContent = 'Lean your torso left or right to charge';
-    if ($('stretching-hold')) $('stretching-hold').classList.add('hidden');
-  } else if (stretchingState.section === 2) {
-    if ($('stretching-progress-text')) $('stretching-progress-text').textContent = `${stretchingState.steps} / 8 STEPS`;
-    if ($('stretching-progress-fill')) $('stretching-progress-fill').style.width = `${(stretchingState.steps / 8) * 100}%`;
-    if ($('stretching-instruction-badge')) $('stretching-instruction-badge').textContent = 'MARCH TO PAD';
-    if ($('stretching-instruction-text')) $('stretching-instruction-text').textContent = 'March or lift knees in place to move forward';
-    if ($('stretching-hold')) $('stretching-hold').classList.add('hidden');
+function grabWing(wristIndex = null) {
+  if (stretchingState.phase !== 'collect' || stretchingState.grabbedWrist !== null) return;
+  stretchingState.grabbedWrist = wristIndex ?? 15;
+  stretchingState.moves++;
+  soundEffects.playGrab();
+  itemAuraGroup.visible = false;
+  socketBeacon.visible = true;
+  trailMat.opacity = 0.85;
+  if (activeProp) triggerSparks(activeProp.position, 0xffaa44);
+  setInstruction('◎', 'Bring the wing part into Robo’s glowing socket', 'DELIVER WING');
+  showToast('Wing secured! Bring it to Robo');
+}
+
+function deliverWing() {
+  if (stretchingState.phase !== 'collect' || stretchingState.grabbedWrist === null) return;
+  soundEffects.playDeliver();
+  triggerSparks(new THREE.Vector3(0, 1.4, 0.22), 0xffd043);
+  clearActiveProp();
+  stretchingState.part++;
+  stretchingState.grabbedWrist = null;
+  stretchingState.moves++;
+  socketBeacon.visible = false;
+  trailMat.opacity = 0;
+
+
+  if (stretchingState.part < 6) {
+    showToast(`Wing component ${stretchingState.part}/6 attached`);
+    spawnWingPart();
+    return;
+  }
+
+  // All 6 collected: stretch arms wide to assemble
+  stretchingState.phase = 'assemble';
+  stretchingState.hold = 0;
+  attachedWings.visible = true;
+  attachedWings.scale.setScalar(.05);
+  setProgress('All 6 parts assembled · Extend wingspan', 1);
+  setInstruction('↔', 'Spread both arms wide to calibrate wings', 'LOCK WINGSPAN');
+  setHold(0, 'Hold arm wingspan to lock assembly');
+}
+
+function spawnPowerCell() {
+  const configs = [
+    { name: 'Power_Cell_1', x: -3.2, color: 'Red Plasma', direction: -1, hex: 0xff5f71, aura: 0xff3b52 },
+    { name: 'Power_Cell_2', x: 3.2, color: 'Blue Ion', direction: 1, hex: 0x2ab7ff, aura: 0x47cbff },
+    { name: 'Power_Cell_3', x: -3.2, color: 'Gold Solar', direction: -1, hex: 0xffd043, aura: 0xffaa33 },
+  ];
+  const config = configs[stretchingState.cell];
+  cloneProp(config.name, [config.x, 2.7, .2], 1.15);
+  if (activeProp) activeProp.userData.direction = config.direction;
+  attachItemAura([config.x, 2.7, .2], config.aura, 0xffd043);
+  setInstruction(config.direction < 0 ? '↙' : '↘', `Lean ${config.direction < 0 ? 'left' : 'right'} to choose ${config.color} cell`, 'ALIGN CELL');
+  setProgress(`${stretchingState.cell} / 3 cells energized`, stretchingState.cell / 3);
+}
+
+function selectCell() {
+  if (stretchingState.phase !== 'select') return;
+  stretchingState.phase = 'connect';
+  stretchingState.gestureDwell = 0;
+  stretchingState.moves++;
+  soundEffects.playGrab();
+  if (activeProp) triggerSparks(activeProp.position, 0xffc74f);
+  attachItemAura([0, 2.4, 0.2], 0xffb84d, 0x58eaff);
+  setInstruction('↗', 'Reach diagonally to plug into conduit', 'CONNECT CELL');
+  showToast('Cell aligned! Reach diagonal');
+}
+
+function connectCell() {
+  if (stretchingState.phase !== 'connect') return;
+  soundEffects.playDeliver();
+  triggerSparks(new THREE.Vector3(0, 2.4, 0.2), 0xffd043);
+  clearActiveProp();
+  stretchingState.cell++;
+  stretchingState.moves++;
+  itemAuraGroup.visible = false;
+
+  if (stretchingState.cell < 3) {
+    stretchingState.phase = 'select';
+    spawnPowerCell();
+    showToast('Cell locked into conduit');
+    return;
+  }
+
+  // All 3 cells connected: stay neutral and charge
+  stretchingState.phase = 'charge';
+  stretchingState.hold = 0;
+  setProgress('All 3 cells connected · Charge reactor', 1);
+  setInstruction('✦', 'Stand centered and upright in sunset light', 'REACTOR CHARGE');
+  setHold(0, 'Hold centered posture to charge');
+}
+
+function spawnCore() {
+  clearActiveProp();
+  const source = stretchingPropsSource?.getObjectByName('Golden_Energy_Core');
+  if (!source) return;
+  energyCore = prepareStretchObject(source.clone(true), true);
+  energyCore.scale.setScalar(.85);
+  stretchingGroup.add(energyCore);
+  energyCore.position.copy(playerStage.position).add(new THREE.Vector3(0, 1.3, -.25));
+
+}
+
+function updateMarchUI() {
+  setProgress(`${stretchingState.steps} / 8 steps along sunset route`, stretchingState.steps / 8);
+  setInstruction('⇧', stretchingState.profile === 'seated' ? 'Alternate lifting your hands' : 'March in place toward launch pad', 'MARCH FORWARD');
+}
+
+function marchStep() {
+  if (stretchingState.phase !== 'march' || performance.now() - stretchingState.lastMovement < 280) return;
+  stretchingState.lastMovement = performance.now();
+  stretchingState.steps++;
+  stretchingState.moves++;
+  soundEffects.playStep();
+  const routeIndex = Math.min(4, Math.floor(stretchingState.steps / 2));
+  robotGoal = ROUTE[routeIndex].clone();
+  pedestal.position.copy(ROUTE[routeIndex]).setY(ROUTE[routeIndex].y - 0.02);
+  triggerSparks(playerStage.position, 0xffaa44);
+  updateMarchUI();
+
+  if (stretchingState.steps === 3 || stretchingState.steps === 6) {
+    stretchingState.phase = 'sidestep';
+    stretchingState.sideDirection = stretchingState.steps === 3 ? -1 : 1;
+    setInstruction(stretchingState.sideDirection < 0 ? '←' : '→', `Step ${stretchingState.sideDirection < 0 ? 'left' : 'right'} onto the bridge platform`, 'SIDE STEP');
+    attachItemAura([playerStage.position.x + (stretchingState.sideDirection < 0 ? -2.2 : 2.2), playerStage.position.y + 0.2, playerStage.position.z], 0xff7e38, 0xffd043);
+  } else if (stretchingState.steps >= 8) {
+    startLaunch();
+  }
+}
+
+function sideStep() {
+  if (stretchingState.phase !== 'sidestep') return;
+  stretchingState.moves++;
+  stretchingState.phase = 'march';
+  soundEffects.playGrab();
+  itemAuraGroup.visible = false;
+  showToast('Bridge crossed!');
+  updateMarchUI();
+}
+
+function startLaunch() {
+  stretchingState.phase = 'launch';
+  stretchingState.launchMoves = 0;
+  robotGoal = ROUTE[5].clone();
+  pedestal.position.copy(ROUTE[5]).setY(ROUTE[5].y - 0.02);
+  itemAuraGroup.visible = false;
+  setProgress('Thruster burn: 0 / 3', 0);
+  setInstruction('↓', stretchingState.profile === 'seated' ? 'Press both arms down firmly' : 'Perform 3 shallow squats to power thrusters', 'IGNITE THRUSTERS');
+}
+
+function launchMove() {
+  if (stretchingState.phase !== 'launch' || performance.now() - stretchingState.lastMovement < 420) return;
+  stretchingState.lastMovement = performance.now();
+  stretchingState.launchMoves++;
+  stretchingState.moves++;
+  soundEffects.playStep();
+  triggerSparks(playerStage.position, 0xff8822);
+  setProgress(`Thruster burn: ${stretchingState.launchMoves} / 3`, stretchingState.launchMoves / 3);
+  showToast(`Thruster charge ${stretchingState.launchMoves}/3`);
+
+  if (stretchingState.launchMoves >= 3) {
+    finishGame();
   }
 }
 
 function skipStretchingStep() {
-  soundEffects.playSelect();
   if (stretchingState.section === 0) {
-    if (stretchingState.phase === 'collect') {
-      stretchingState.part++;
-      clearActiveProp();
-      if (stretchingState.part >= 6) {
-        stretchingState.phase = 'assemble';
-        if (attachedWings) {
-          attachedWings.visible = true;
-          attachedWings.scale.setScalar(1);
-        }
-      } else {
-        spawnWingPart();
-      }
-    } else if (stretchingState.phase === 'assemble') {
-      initStretchingSection(1);
-    }
+    stretchingState.phase === 'collect'
+      ? (stretchingState.grabbedWrist === null ? grabWing() : deliverWing())
+      : finishSection(0);
   } else if (stretchingState.section === 1) {
-    stretchingState.cell++;
-    if (stretchingState.cell >= 4) {
-      initStretchingSection(2);
-    }
-  } else if (stretchingState.section === 2) {
-    stretchingState.steps += 2;
-    if (stretchingState.steps >= 8) {
-      showStretchingEndScreen();
-    }
+    stretchingState.phase === 'select'
+      ? selectCell()
+      : stretchingState.phase === 'connect'
+        ? connectCell()
+        : finishSection(1);
+  } else {
+    stretchingState.phase === 'march'
+      ? marchStep()
+      : stretchingState.phase === 'sidestep'
+        ? sideStep()
+        : launchMove();
   }
   renderStretchingUI();
 }
 
-function updateStretchingMotion(lm, worldLm, dt, now) {
-  if (stretchingState.section === 0) {
-    if (stretchingState.phase === 'collect') {
-      const target = PART_TARGETS[stretchingState.part];
-      if (target && stretchingState.grabbedWrist === null) {
-        const found = wristNear(lm, target, 0.22);
-        if (found) {
-          stretchingState.grabbedWrist = found.index;
-          stretchingState.moves++;
-          soundEffects.playGrab();
-          itemAuraGroup.visible = false;
-          socketBeacon.visible = true;
-          trailMat.opacity = 0.85;
-          if (activeProp) triggerSparks(activeProp.position, 0xffaa44);
-          renderStretchingUI();
-        }
-      } else if (stretchingState.grabbedWrist !== null) {
-        const nearSocket = wristNear(lm, { x: 0.5, y: 0.5 }, 0.26, stretchingState.grabbedWrist);
-        if (nearSocket) {
-          soundEffects.playDeliver();
-          triggerSparks(new THREE.Vector3(0, 1.4, 0.22), 0xffd043);
-          clearActiveProp();
-          stretchingState.part++;
-          stretchingState.grabbedWrist = null;
-          stretchingState.moves++;
-          socketBeacon.visible = false;
-          trailMat.opacity = 0;
-          if (stretchingState.part >= 6) {
-            stretchingState.phase = 'assemble';
-            stretchingState.hold = 0;
-            if (attachedWings) {
-              attachedWings.visible = true;
-              attachedWings.scale.setScalar(1);
-            }
-          } else {
-            spawnWingPart();
-          }
-          renderStretchingUI();
-        }
-      }
-    } else if (stretchingState.phase === 'assemble') {
-      const metrics = bodyMetrics(lm);
-      if (metrics.armsWide) {
-        stretchingState.hold += dt;
-        soundEffects.startHoldHum();
-        if (stretchingState.hold >= 1.5) {
-          soundEffects.stopHoldHum();
-          soundEffects.playComplete();
-          initStretchingSection(1);
-        }
-      } else {
-        stretchingState.hold = Math.max(0, stretchingState.hold - dt * 0.5);
-        soundEffects.stopHoldHum();
-      }
-      renderStretchingUI();
-    }
-  } else if (stretchingState.section === 1) {
-    const metrics = bodyMetrics(lm);
-    if (Math.abs(metrics.lean) > 0.35 || metrics.diagonal) {
-      stretchingState.hold += dt;
-      if (stretchingState.hold >= 1.2) {
-        soundEffects.playDeliver();
-        stretchingState.cell++;
-        stretchingState.hold = 0;
-        if (stretchingState.cell >= 4) {
-          soundEffects.playComplete();
-          initStretchingSection(2);
-        }
-        renderStretchingUI();
-      }
-    }
-  } else if (stretchingState.section === 2) {
-    if (stretchingState.phase === 'complete') return;
-    const metrics = bodyMetrics(lm);
-    const left = Boolean(metrics.leftKnee || metrics.leftHandUp);
-    const right = Boolean(metrics.rightKnee || metrics.rightHandUp);
-    const isNewStep = (left && !stretchingPrevStepMetrics.left) || (right && !stretchingPrevStepMetrics.right);
-    stretchingPrevStepMetrics = { left, right };
+function updateGameplay(dt, metrics) {
+  if (gameCountdownActive || stretchingState.screen !== 'playing' || stretchingState.paused) return;
+  const sensitivity = movementThreshold(stretchingState.range);
 
-    if (isNewStep && (now - stretchingLastStepAt >= 380)) {
-      stretchingLastStepAt = now;
-      stretchingState.steps++;
-      soundEffects.playStep();
-      triggerSparks(playerStage.position, 0xffaa44);
-      renderStretchingUI();
-      if (stretchingState.steps >= 8) {
-        showStretchingEndScreen();
+  // Chapter 1: Wings
+  if (stretchingState.section === 0 && stretchingState.phase === 'collect' && stretchingState.mode === 'camera') {
+    const radius = [.21, .16, .12][stretchingState.range];
+    if (stretchingState.grabbedWrist === null) {
+      const wrist = wristNear(stretchingState.latestImage, PART_TARGETS[stretchingState.part], radius);
+      if (wrist) grabWing(wrist.index);
+    } else {
+      const wrist = wristNear(stretchingState.latestImage, { x: .5, y: .58 }, radius * 1.35, stretchingState.grabbedWrist);
+      if (wrist) deliverWing();
+      else {
+        const active = wristPositions(stretchingState.latestImage).find(item => item.index === stretchingState.grabbedWrist);
+        if (active && activeProp) {
+          activeProp.position.set((active.x - .5) * 8.2, (1 - active.y) * 5.2 - .4, .15);
+          // Comet trail update
+          trailPositions[trailIndex * 3] = activeProp.position.x;
+          trailPositions[trailIndex * 3 + 1] = activeProp.position.y;
+          trailPositions[trailIndex * 3 + 2] = activeProp.position.z;
+          trailIndex = (trailIndex + 1) % trailCount;
+          trailGeo.attributes.position.needsUpdate = true;
+        }
       }
+    }
+  }
+
+  if (stretchingState.section === 0 && stretchingState.phase === 'assemble') {
+    const active = stretchingState.mode === 'keyboard' ? keysDown.has('Space') : metrics.armsWide;
+    if (active) soundEffects.startHoldHum();
+    else soundEffects.stopHoldHum();
+    stretchingState.hold = Math.max(0, stretchingState.hold + (active ? dt : -dt * .65));
+    const progress = Math.min(1, stretchingState.hold / (2.6 * sensitivity));
+    setHold(progress, 'Hold arms wide to build wings');
+    if (attachedWings) attachedWings.scale.setScalar(.05 + progress * .95);
+    if (progress >= 1) {
+      stretchingState.moves++;
+      finishSection(0);
+      return;
+    }
+  }
+
+  // Chapter 2: Cells
+  if (stretchingState.section === 1 && stretchingState.phase === 'select' && stretchingState.mode === 'camera' && metrics.valid) {
+    const desired = activeProp?.userData.direction || 1;
+    const matched = Math.sign(metrics.lean) === desired && Math.abs(metrics.lean) > .22 * sensitivity;
+    stretchingState.gestureDwell = Math.max(0, stretchingState.gestureDwell + (matched ? dt : -dt));
+    if (stretchingState.gestureDwell > .42) selectCell();
+  }
+
+  if (stretchingState.section === 1 && stretchingState.phase === 'connect' && stretchingState.mode === 'camera' && metrics.diagonal) {
+    connectCell();
+  }
+
+  if (stretchingState.section === 1 && stretchingState.phase === 'charge') {
+    const active = stretchingState.mode === 'keyboard' ? keysDown.has('Space') : metrics.neutral;
+    if (active) soundEffects.startHoldHum();
+    else soundEffects.stopHoldHum();
+    stretchingState.hold = Math.max(0, stretchingState.hold + (active ? dt : -dt * .5));
+    const progress = Math.min(1, stretchingState.hold / (2.6 * sensitivity));
+    setHold(progress, 'Hold centered posture to charge reactor');
+    const bar = stretchingEnvironments[1]?.getObjectByName('Charge_Bar_Glow');
+    if (bar) bar.scale.x = .35 + progress * 2.5;
+    if (progress >= 1) {
+      stretchingState.moves++;
+      finishSection(1);
+      return;
+    }
+  }
+
+  // Chapter 3: March & Launch
+  if (stretchingState.section === 2 && stretchingState.mode === 'camera') {
+    updateLowerBody(metrics, dt);
+  }
+}
+
+function updateLowerBody(metrics, dt) {
+  if (!metrics.valid) {
+    stretchingState.neutralTime = 0;
+    stretchingState.stepReady = false;
+    stretchingState.sideHold = 0;
+    stretchingState.squatHold = 0;
+    return;
+  }
+  if (stretchingState.phase === 'march') {
+    const lifted = metrics.leftKnee || metrics.rightKnee;
+    // Require a settled feet-down pose between steps. A held knee, stale frame,
+    // or visibility flicker must not advance the route repeatedly.
+    if (!lifted) {
+      stretchingState.neutralTime += dt;
+      if (stretchingState.neutralTime >= .18) stretchingState.stepReady = true;
+    } else {
+      if (stretchingState.stepReady) marchStep();
+      stretchingState.stepReady = false;
+      stretchingState.neutralTime = 0;
+    }
+  } else if (stretchingState.phase === 'sidestep') {
+    const aligned = Math.sign(metrics.lean) === stretchingState.sideDirection && Math.abs(metrics.lean) > .24;
+    stretchingState.sideHold = aligned ? stretchingState.sideHold + dt : 0;
+    if (stretchingState.sideHold >= .25) {
+      stretchingState.sideHold = 0;
+      stretchingState.stepReady = false;
+      stretchingState.neutralTime = 0;
+      sideStep();
+    }
+  } else if (stretchingState.phase === 'launch') {
+    if (stretchingState.squatBaseline === null) stretchingState.squatBaseline = metrics.squat;
+    const down = metrics.squat > stretchingState.squatBaseline + .17 * movementThreshold(stretchingState.range);
+    stretchingState.squatHold = down ? stretchingState.squatHold + dt : 0;
+    if (!down) stretchingState.previousMetrics.launch = false;
+    if (stretchingState.squatHold >= .2 && !stretchingState.previousMetrics.launch) {
+      launchMove();
+      stretchingState.previousMetrics.launch = true;
     }
   }
 }
@@ -1002,6 +1221,7 @@ const classifier = new PoseClassifier();
 new GLTFLoader().load(
   `${import.meta.env.BASE_URL}robot/blue_robot.glb`,
   (gltf) => {
+    boxingOpponent.setModel(gltf.scene);
     const robot = gltf.scene;
     robotInstance = robot;
     playerRestPosition = robot.position.clone();
@@ -1087,12 +1307,14 @@ Promise.all([
     attachedWings = wingsProp;
     playerStage.add(attachedWings);
   }
+  if (currentView === 'game' && activeGame.gameType === 'stretching') initStretchingSection(0);
 }).catch((err) => console.warn('Stretching assets load notice:', err));
 
 // ============================================================================
 // Camera Controls (Available from Header or Aside)
 // ============================================================================
 function stopCamera() {
+  cancelGameCountdown();
   epoch++;
   starting = false;
   stream?.getTracks().forEach((t) => t.stop());
@@ -1109,6 +1331,8 @@ function stopCamera() {
   playerHitAt = -Infinity;
   playerHitSide = 0;
   flightRace.reset();
+  currentFlightInput = flightInput(null);
+  wingController.reset();
   renderFlightUI();
   stretchingState.hold = 0;
   soundEffects.stopHoldHum();
@@ -1215,6 +1439,7 @@ async function startCamera() {
 
     $('camera-placeholder').hidden = true;
     mode = 'camera';
+    if (currentView === 'game' && !gameCountdownActive && !roundComplete) startActiveGameCountdown();
     lastSeen = performance.now();
     status(`Camera ready · ${tracker.delegate} tracking · Mirror mode`);
     renderBoxingRound(boxingRound.snapshot(performance.now()));
@@ -1425,6 +1650,7 @@ function configureActiveGame() {
   const isFlying = activeGame.gameType === 'flying';
   const isStretching = activeGame.gameType === 'stretching';
 
+  if (attachedWings) attachedWings.visible = false;
   setPlayerHeadTransparent(isBoxing);
   boxingOpponent.group.visible = isBoxing;
   $('boxing-forecast').hidden = !isBoxing;
@@ -1524,49 +1750,31 @@ function renderBoxingRound(state) {
       ? 'Match each cue at NOW. For punches, push one fist toward the camera, then bring it back to guard.'
       : 'Stand centered with shoulders, hips, elbows, and wrists visible. The first moments calibrate your guard.';
 
-  if (boxingRecordedCue && !state.cues.some((cue) => cue.index === boxingRecordedCue.index)) {
-    boxingRecordedCue = null;
-  }
-  const cueKey = state.cues.map((cue) => {
-    const result = boxingRecordedCue?.index === cue.index ? boxingRecordedCue.result : '';
-    return `${cue.index}:${cue.state}:${Math.ceil(cue.inMs / 1000)}:${result}`;
-  }).join('|');
-  if (cueKey === boxingCueRenderKey) return;
-  boxingCueRenderKey = cueKey;
-  const cueList = $('boxing-cue-list');
-  cueList.replaceChildren(...state.cues.map((cue, index) => {
-    const card = document.createElement('div');
-    card.className = `boxing-cue boxing-cue-${cue.state}`;
-    const result = boxingRecordedCue?.index === cue.index ? boxingRecordedCue.result : '';
-    const wasRecorded = result === 'recorded';
-    const wasHit = result === 'hit';
-    if (wasRecorded) card.classList.add('boxing-cue-recorded');
-    if (wasHit) card.classList.add('boxing-cue-hit');
-    card.setAttribute('aria-label', wasHit
-      ? `${cue.label}, hit`
-      : wasRecorded
-        ? `${cue.label} recorded`
-      : `${index === 0 ? 'Now' : `Coming up ${index}`}: ${cue.label}`);
-    const mark = document.createElement('span');
-    mark.className = 'boxing-cue-mark';
-    mark.setAttribute('aria-hidden', 'true');
-    mark.textContent = cue.mark;
-    const label = document.createElement('strong');
-    label.textContent = wasHit ? `${cue.label} HIT` : wasRecorded ? `${cue.label} RECORDED` : cue.label;
-    const opponentLabel = document.createElement('span');
-    opponentLabel.className = 'boxing-cue-opponent';
-    opponentLabel.textContent = wasHit ? 'GUARD MISSED' : wasRecorded ? 'GREAT MOVE' : cue.opponentLabel;
-    const timing = document.createElement('small');
-    timing.textContent = wasHit
-      ? 'HIT'
-      : wasRecorded
-        ? 'MOVE DETECTED'
-      : cue.state === 'now'
-      ? (state.active ? 'NOW' : 'READY')
-      : cue.state === 'done' ? 'DONE' : `${Math.ceil(cue.inMs / 1000)} SEC`;
-    card.append(mark, label, opponentLabel, timing);
-    return card;
-  }));
+  const prompt = $('boxing-action');
+  const cue = state.active && !gameCountdownActive
+    ? state.cues.find(item => item.state === 'now')
+      || state.cues.find(item => item.state === 'upcoming' && item.inMs > 0 && item.inMs <= 900)
+    : null;
+  const key = cue ? `${cue.index}:${cue.id}:${cue.state}` : '';
+  prompt.hidden = !cue || currentView !== 'game' || activeGame.gameType !== 'boxing-beat';
+  if (key === boxingCueRenderKey) return;
+  boxingCueRenderKey = key;
+  if (!cue) return;
+  const actions = {
+    'move-left': ['left', 'Dodge Left', '←'],
+    'move-right': ['right', 'Dodge Right', '→'],
+    'punch-left': ['left', 'Left Punch', '↗'],
+    'punch-right': ['right', 'Right Punch', '↖'],
+    duck: ['left', 'Duck Down', '↓'],
+    block: ['right', 'Block', '↑'],
+  };
+  const [side, label, arrow] = actions[cue.id];
+  prompt.dataset.side = side;
+  prompt.dataset.timing = cue.state;
+  $('boxing-action-label').textContent = label;
+  $('boxing-action-arrow').textContent = arrow;
+  $('boxing-action-timing').textContent = cue.state === 'now' ? 'NOW!' : 'GET READY';
+  if (cue.state === 'now') soundEffects.playGameCue(cue.id.startsWith('punch') ? 680 : 440);
 }
 
 function showBoxingImpact(now) {
@@ -1580,11 +1788,13 @@ function handleBoxingRoundEvents(state, now) {
     const move = state.recordedMove;
     boxingRecordedCue = { index: state.recordedCueIndex, result: 'recorded' };
     if (move === 'punch-left' || move === 'punch-right') {
+      soundEffects.playGameHit();
       boxingOpponent.receiveHit(now, move);
       showBoxingImpact(now);
       state.feedback = `Clean hit! ${move === 'punch-left' ? 'Left' : 'Right'} punch landed`;
       boxingRound.feedback = state.feedback;
     } else {
+      soundEffects.playGrab();
       boxingOpponent.dodgeAttack(now, move);
       state.feedback = 'Clean dodge! The punch missed';
       boxingRound.feedback = state.feedback;
@@ -1593,6 +1803,7 @@ function handleBoxingRoundEvents(state, now) {
 
   for (const missed of state.missedCues) {
     if (!missed.wasHit) continue;
+    soundEffects.playGameHit(false);
     boxingRecordedCue = { index: missed.index, result: 'hit' };
     playerHitAt = now;
     playerHitSide = missed.move === 'move-left' ? 1 : missed.move === 'move-right' ? -1 : 0;
@@ -1605,7 +1816,7 @@ function handleBoxingRoundEvents(state, now) {
   if (state.recordedMove || state.missedCues.length) boxingCueRenderKey = '';
 }
 
-$('boxing-start-round').onclick = () => {
+function startBoxingRound() {
   if (mode !== 'camera') {
     status('Start the camera before beginning a Boxing Beat round.');
     return;
@@ -1620,9 +1831,15 @@ $('boxing-start-round').onclick = () => {
   boxingPunchDetector.reset();
   boxingRound.start(performance.now());
   renderBoxingRound(boxingRound.snapshot(performance.now()));
-};
+}
+$('boxing-start-round').onclick = startBoxingRound;
 
 function returnToCarousel() {
+  roundComplete = false;
+  practiceDeadline = 0;
+  $('round-end-screen').hidden = true;
+  $('boxing-action').hidden = true;
+  cancelGameCountdown();
   setPlayerHeadTransparent(false);
   boxingRound.reset();
   boxingPunchDetector.reset();
@@ -1646,6 +1863,7 @@ function returnToCarousel() {
   if ($('stretching-panel')) $('stretching-panel').hidden = true;
   if (robotWingsModel) robotWingsModel.visible = false;
   clearActiveProp();
+  if (attachedWings) attachedWings.visible = false;
   flightRace.reset();
   soundEffects.stopHoldHum();
   $('view-game').dataset.game = '';
@@ -1666,20 +1884,66 @@ function returnToCarousel() {
   $('carousel-announcement').textContent = 'Returned to games carousel.';
 }
 
+function cancelGameCountdown() {
+  clearTimeout(gameCountdownTimer);
+  gameCountdownTimer = null;
+  gameCountdownActive = false;
+  $('game-countdown').hidden = true;
+}
+
+function startActiveGameCountdown(replay = false) {
+  cancelGameCountdown();
+  if (currentView !== 'game') return;
+  roundComplete = false;
+  practiceDeadline = 0;
+  $('round-end-screen').hidden = true;
+  hideFlightEndScreen();
+  hideStretchingEndScreen();
+  gameCountdownActive = true;
+  hideMotionHands();
+  stretchingState.paused = true;
+  const gameId = activeGame.id;
+  let remaining = 3;
+  const tick = () => {
+    if (currentView !== 'game' || activeGame.id !== gameId) {
+      cancelGameCountdown();
+      return;
+    }
+    if (remaining === 0) {
+      cancelGameCountdown();
+      stretchingState.paused = false;
+      soundEffects.playGameCue(880);
+      if (activeGame.gameType === 'boxing-beat') startBoxingRound();
+      else if (activeGame.gameType === 'flying') startFlightRun();
+      else if (activeGame.gameType === 'stretching' && replay) initStretchingSection(0);
+      else if (!activeGame.gameType) practiceDeadline = performance.now() + 60_000;
+      status(`Entered ${activeGame.title}. Move to begin exercise.`);
+      return;
+    }
+    soundEffects.playGameCue(remaining === 1 ? 660 : 440);
+    $('game-countdown-number').textContent = String(remaining);
+    $('game-countdown').hidden = false;
+    remaining -= 1;
+    gameCountdownTimer = setTimeout(tick, 1000);
+  };
+  tick();
+}
+
 function launchActiveGame() {
   soundEffects.playSelect();
   configureActiveGame();
   showView('game');
   requestAnimationFrame(() => resize());
-  if (activeGame.gameType === 'flying') {
-    startFlightRun();
-  }
-  status(`Entered ${activeGame.title}. Move to begin exercise.`);
+  if (mode !== 'camera' && !starting) startCamera().catch(console.warn);
+  startActiveGameCountdown();
+
 }
 
 $('btn-details-back').onclick = returnToCarousel;
 $('btn-start-game').onclick = launchActiveGame;
 $('btn-back-to-carousel').onclick = returnToCarousel;
+$('btn-round-restart').onclick = () => startActiveGameCountdown(true);
+$('btn-round-menu').onclick = returnToCarousel;
 
 function startFlightRun() {
   soundEffects.playSelect();
@@ -1687,6 +1951,9 @@ function startFlightRun() {
   flightRace.start(performance.now());
   resetFlightCourse();
   wingController.reset();
+  currentFlightInput = flightInput(null);
+  playerStage.position.set(0, .6, 0);
+  playerStage.rotation.set(0, Math.PI, 0);
   if (robotWingRig) robotWingRig.reset(true);
   flightAltitude = 0.6;
   flightVerticalVelocity = 0;
@@ -1695,12 +1962,12 @@ function startFlightRun() {
   status('You are airborne! Flap arms downward to gain altitude, lean to steer.');
 }
 
-if ($('flying-launch-btn')) $('flying-launch-btn').onclick = startFlightRun;
-if ($('flying-start-round')) $('flying-start-round').onclick = startFlightRun;
-if ($('btn-flying-replay')) $('btn-flying-replay').onclick = startFlightRun;
+if ($('flying-launch-btn')) $('flying-launch-btn').onclick = () => startActiveGameCountdown(true);
+if ($('flying-start-round')) $('flying-start-round').onclick = () => startActiveGameCountdown(true);
+if ($('btn-flying-replay')) $('btn-flying-replay').onclick = () => startActiveGameCountdown(true);
 if ($('btn-flying-menu')) $('btn-flying-menu').onclick = returnToCarousel;
 
-if ($('btn-stretching-replay')) $('btn-stretching-replay').onclick = () => initStretchingSection(0);
+if ($('btn-stretching-replay')) $('btn-stretching-replay').onclick = () => startActiveGameCountdown(true);
 if ($('btn-stretching-menu')) $('btn-stretching-menu').onclick = returnToCarousel;
 
 if ($('stretching-skip-btn')) {
@@ -1891,6 +2158,53 @@ function detectHandClosed(landmarks, isRightHand) {
   return { ratio };
 }
 
+function getCompletionScreen() {
+  if (!roundComplete || currentView !== 'game') return null;
+  return document.querySelector('#round-end-screen:not([hidden]), #flying-end-screen:not([hidden]), #stretching-end-screen:not([hidden])');
+}
+
+function hideMotionHands(now = performance.now()) {
+  updateHandCursor(cursorL, cursorLeftEl, stateTextLeft, handDwellLeftEl, {x:0,y:0}, false, 1, now);
+  updateHandCursor(cursorR, cursorRightEl, stateTextRight, handDwellRightEl, {x:0,y:0}, false, 1, now);
+}
+
+function updateMotionHands(lm, now) {
+  if (gameCountdownActive || (currentView === 'game' && !getCompletionScreen())) {
+    hideMotionHands(now);
+    return;
+  }
+              // Process Hand Cursors (Restricted to activeSelectingHand: right, left, or both)
+              const rw = lm[16]; // Right wrist
+              const lw = lm[15]; // Left wrist
+
+              const allowRightCursor = activeSelectingHand === 'right' || activeSelectingHand === 'both';
+              const allowLeftCursor = activeSelectingHand === 'left' || activeSelectingHand === 'both';
+
+              // Right Hand Cursor
+              if (allowRightCursor && rw && (rw.visibility ?? 0) >= 0.4) {
+                const targetPos = mapWristToScreen(1 - rw.x, rw.y);
+                const rightHandGrip = detectHandClosed(lm, true);
+                updateHandCursor(cursorR, cursorRightEl, stateTextRight, handDwellRightEl, targetPos, true, rightHandGrip.ratio, now);
+              } else {
+                updateHandCursor(cursorR, cursorRightEl, stateTextRight, handDwellRightEl, { x: 0, y: 0 }, false, 1.0, now);
+              }
+
+              if (gameCountdownActive || (currentView === 'game' && !getCompletionScreen())) {
+                hideMotionHands(now);
+                return;
+              }
+
+              // Left Hand Cursor
+              if (allowLeftCursor && lw && (lw.visibility ?? 0) >= 0.4) {
+                const targetPos = mapWristToScreen(1 - lw.x, lw.y);
+                const leftHandGrip = detectHandClosed(lm, false);
+                updateHandCursor(cursorL, cursorLeftEl, stateTextLeft, handDwellLeftEl, targetPos, true, leftHandGrip.ratio, now);
+              } else {
+                updateHandCursor(cursorL, cursorLeftEl, stateTextLeft, handDwellLeftEl, { x: 0, y: 0 }, false, 1.0, now);
+              }
+
+}
+
 function updateHandCursor(cursorState, cursorElement, stateTextElement, dwellFillElement, targetPos, isVisible, handRatio, now) {
   if (!isVisible) {
     if (cursorState.visible) {
@@ -1940,7 +2254,7 @@ function updateHandCursor(cursorState, cursorElement, stateTextElement, dwellFil
   let clickableTarget = elementAtPoint?.closest('.motion-target, .carousel-card, button, .mode-btn, .radio-card, .radio-pill, .motion-select-card');
 
   // When a modal popup is open, motion selection MUST be confined to elements inside the active popup!
-  const activeModal = document.querySelector('dialog[open]');
+  const activeModal = document.querySelector('dialog[open]') || getCompletionScreen();
   if (activeModal) {
     if (clickableTarget && !activeModal.contains(clickableTarget)) {
       clickableTarget = null;
@@ -2985,6 +3299,7 @@ function animate(now) {
   boxingOpponent.group.visible = isBoxingGame;
   if (isBoxingGame) {
     const boxingState = boxingRound.snapshot(now);
+    renderBoxingRound(boxingState);
     const cue = boxingRound.active
       ? boxingState.cues.find((item) => item.state === 'now')
         || boxingState.cues.find((item) => item.state === 'upcoming' && item.inMs <= 900)
@@ -2995,7 +3310,9 @@ function animate(now) {
   }
 
   if (rig) {
-    if (mode === 'demo') {
+    if (gameCountdownActive) {
+      rig.reset(1 - Math.exp(-7 * dt));
+    } else if (mode === 'demo') {
       rig.demo(now / 1000, dt);
     } else if (mode === 'camera') {
       if (now - lastInference > 33 && video.readyState >= 2 && video.currentTime !== tracker.lastVideoTime) {
@@ -3033,38 +3350,7 @@ function animate(now) {
               updateStretchingMotion(lm, frame.worldLandmarks, dt, now);
             }
 
-            // Hand cursors are only active and visible outside of active gameplay (Carousel & Details views)
-            if (currentView === 'game') {
-              cursorLeftEl.classList.add('hidden');
-              cursorRightEl.classList.add('hidden');
-              cursorL.visible = false;
-              cursorR.visible = false;
-            } else {
-              // Process Hand Cursors (Restricted to activeSelectingHand: right, left, or both)
-              const rw = lm[16]; // Right wrist
-              const lw = lm[15]; // Left wrist
-
-              const allowRightCursor = activeSelectingHand === 'right' || activeSelectingHand === 'both';
-              const allowLeftCursor = activeSelectingHand === 'left' || activeSelectingHand === 'both';
-
-              // Right Hand Cursor
-              if (allowRightCursor && rw && (rw.visibility ?? 0) >= 0.4) {
-                const targetPos = mapWristToScreen(1 - rw.x, rw.y);
-                const rightHandGrip = detectHandClosed(lm, true);
-                updateHandCursor(cursorR, cursorRightEl, stateTextRight, handDwellRightEl, targetPos, true, rightHandGrip.ratio, now);
-              } else {
-                updateHandCursor(cursorR, cursorRightEl, stateTextRight, handDwellRightEl, { x: 0, y: 0 }, false, 1.0, now);
-              }
-
-              // Left Hand Cursor
-              if (allowLeftCursor && lw && (lw.visibility ?? 0) >= 0.4) {
-                const targetPos = mapWristToScreen(1 - lw.x, lw.y);
-                const leftHandGrip = detectHandClosed(lm, false);
-                updateHandCursor(cursorL, cursorLeftEl, stateTextLeft, handDwellLeftEl, targetPos, true, leftHandGrip.ratio, now);
-              } else {
-                updateHandCursor(cursorL, cursorLeftEl, stateTextLeft, handDwellLeftEl, { x: 0, y: 0 }, false, 1.0, now);
-              }
-            }
+            updateMotionHands(lm, now);
 
             // Process "Cross Hands in X" Gesture
             processCrossHandsPose(lm, dt, now);
@@ -3080,10 +3366,12 @@ function animate(now) {
       if (mode === 'camera' && latest && now - lastSeen < 450) {
         // Automatically follow legs if legs are in frame
         const followLegs = Boolean(latest.worldLandmarks && ([25, 26, 27, 28].some(i => (latest.worldLandmarks[i]?.visibility ?? 1) > 0.45)));
-        if (currentView === 'game' && activeGame.gameType === 'flying') {
+        if (roundComplete) {
+          rig.reset(1 - Math.exp(-6 * dt));
+        } else if (currentView === 'game' && activeGame.gameType === 'flying') {
           rig.reset(1 - Math.exp(-6 * dt));
         } else {
-          rig.apply(latest.worldLandmarks, dt, followLegs);
+          rig.apply(latest.worldLandmarks, dt, followLegs, currentView === 'game' && activeGame.gameType === 'stretching');
         }
       } else if (isWelcomePreviewActive) {
         // Friendly greeting wave from Blue while in the welcome setup dialog
@@ -3095,8 +3383,7 @@ function animate(now) {
           wasTracking = false;
           if ($('pose')) $('pose').textContent = 'Step into view';
           status('Body not visible. Keep shoulders and chest in frame.');
-          cursorLeftEl.classList.add('hidden');
-          cursorRightEl.classList.add('hidden');
+          hideMotionHands(now);
         }
         if (currentView === 'game' && activeGame.gameType === 'boxing-beat' && boxingRound.active) {
           const boxingState = boxingRound.tick(now);
@@ -3137,10 +3424,31 @@ function animate(now) {
     }
   }
 
+  if (currentView === 'game' && !gameCountdownActive && !roundComplete) {
+    const boxingFinished = activeGame.gameType === 'boxing-beat'
+      && boxingRound.sequence.length > 0 && now - boxingRound.startedAt >= boxingRound.durationMs;
+    const practiceFinished = !activeGame.gameType && practiceDeadline > 0 && now >= practiceDeadline;
+    if (boxingFinished || practiceFinished) {
+      if (boxingFinished) {
+        const result = boxingRound.tick(now);
+        renderBoxingRound(result);
+        $('round-end-result').textContent = `${result.score} points · Best streak: ${result.bestStreak}`;
+      } else {
+        $('round-end-result').textContent = 'One minute of mirror practice completed!';
+      }
+      roundComplete = true;
+      $('boxing-action').hidden = true;
+      $('round-end-screen').hidden = false;
+      soundEffects.playComplete();
+      $('btn-round-restart').focus({preventScroll:true});
+    }
+  }
+
   const isFlyingGame = currentView === 'game' && activeGame.gameType === 'flying';
   const isStretchingGame = currentView === 'game' && activeGame.gameType === 'stretching';
 
   if (isFlyingGame) {
+    if (mode !== 'camera' || now - lastSeen > 450) currentFlightInput = flightInput(null);
     const starArray = flightStars.geometry.attributes.position.array;
     const worldSpeed = flightRace.phase === 'flying' ? 4.6 : 0.7;
     for (let index = 2; index < starArray.length; index += 3) {
@@ -3169,6 +3477,7 @@ function animate(now) {
       if (currentFlightInput.flap) {
         flightVerticalVelocity = Math.min(1.5, flightVerticalVelocity + 1.05);
         lastFlapVisualAt = now;
+        soundEffects.playGameCue(260);
         currentFlightInput.flap = false;
       }
       if (currentFlightInput.gliding) {
@@ -3242,6 +3551,12 @@ function animate(now) {
   }
 
   if (isStretchingGame) {
+    stretchingState.mode = 'camera';
+    const points = mode === 'camera' && latest && now - lastSeen < 450 ? latest.landmarks : null;
+    stretchingState.latestImage = points;
+    updateGameplay(dt, bodyMetrics(points));
+    if (robotGoal) playerStage.position.lerp(robotGoal, 1 - Math.exp(-3 * dt));
+    if (energyCore) energyCore.position.copy(playerStage.position).add(new THREE.Vector3(0, 1.3, -.25));
     if (itemAuraGroup && itemAuraGroup.visible) {
       gyro1.rotation.y += 1.8 * dt;
       gyro1.rotation.x += 0.8 * dt;

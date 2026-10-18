@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { clone } from 'three/addons/utils/SkeletonUtils.js';
+import { RobotRetargeter } from './retarget.js';
 
 function makeMesh(geometry, material, position, parent) {
   const mesh = new THREE.Mesh(geometry, material);
@@ -58,6 +60,38 @@ export class BoxingOpponent {
     this.update(0, 0);
   }
 
+  setModel(source) {
+    const model = clone(source);
+    model.name = 'Red Boxing Robot';
+    model.traverse(object => {
+      if (!object.isMesh) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+      const materials = (Array.isArray(object.material) ? object.material : [object.material]).map(original => {
+        const material = original.clone();
+        if (material.name.includes('enamel')) material.color.setHex(0xe55353);
+        if (material.name.includes('light')) {
+          material.color.setHex(0xffcf66);
+          material.emissive?.setHex(0x8a3d08);
+        }
+        return material;
+      });
+      object.material = Array.isArray(object.material) ? materials : materials[0];
+    });
+    this.group.children.forEach(child => { child.visible = false; });
+    this.group.add(model);
+    this.modelRig = new RobotRetargeter(model);
+    for (const side of ['L', 'R']) {
+      const hand = model.getObjectByName(`hand${side}`);
+      if (!hand) continue;
+      const glove = new THREE.Mesh(new THREE.SphereGeometry(.19, 20, 16),
+        new THREE.MeshStandardMaterial({color: 0xc62e42, roughness: .32, metalness: .15}));
+      glove.scale.set(1, 1.1, 1.2);
+      glove.castShadow = true;
+      hand.add(glove);
+    }
+  }
+
   receiveHit(time, moveId) {
     if (!Number.isFinite(time)) throw new TypeError('Opponent hit time must be finite');
     this.hitAt = time;
@@ -99,6 +133,15 @@ export class BoxingOpponent {
       arm.rotation.x += (target - arm.rotation.x) * Math.min(1, deltaSeconds * 10);
       arm.rotation.z = Math.sin(phase * 2 + index * Math.PI) * (action === 'idle' ? 0.025 : 0.04);
     });
+    if (this.modelRig) {
+      const alpha = 1 - Math.exp(-10 * deltaSeconds);
+      for (const [index, side] of ['L', 'R'].entries()) {
+        const strike = targetFor(index);
+        const direction = index === 0 ? -1 : 1;
+        this.modelRig.point(`upper_arm${side}`, new THREE.Vector3(direction * .45, -.25 + strike * .35, -.3 - strike), alpha);
+        this.modelRig.point(`forearm${side}`, new THREE.Vector3(direction * .08, .8 - strike * .7, -.4 - strike), alpha);
+      }
+    }
     const hitProgress = Math.max(0, 1 - (time - this.hitAt) / 650);
     const whiffProgress = Math.max(0, 1 - (time - this.whiffAt) / 700);
     this.group.position.y = Math.sin(phase * 2.2) * 0.025 + hitProgress * 0.12;

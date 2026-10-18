@@ -202,13 +202,52 @@
       <div class="game-layout">
         <!-- 3D Robot Stage -->
         <section class="stage">
+          <div id="game-countdown" class="game-countdown" role="status" aria-live="assertive" aria-atomic="true" hidden>
+            <span>Get ready</span>
+            <strong id="game-countdown-number">3</strong>
+          </div>
+          <section class="game-camera-pip" aria-label="Live camera preview">
+          <div class="camera">
+            <canvas id="game-camera-canvas"></canvas>
+            <canvas id="overlay"></canvas>
+            <div id="camera-placeholder"></div>
+          </div>
+
+          <div id="status" role="status" aria-live="polite">Loading Moshi</div>
+
+
+          </section>
           <div id="viewport" aria-label="3D robot preview"></div>
           <section id="boxing-forecast" class="boxing-forecast" aria-label="Upcoming boxing moves" hidden>
             <div class="boxing-forecast-heading">
               <span id="boxing-round-clock">45 SEC ROUND</span>
               <span id="boxing-round-feedback" aria-live="polite">Start a round when you are ready</span>
             </div>
-            <div id="boxing-cue-list" class="boxing-cue-list" aria-live="off"></div>
+            <div class="boxing-score-row">
+              <div><span class="boxing-stat-label">SCORE</span><strong id="boxing-score">0</strong></div>
+              <div><span class="boxing-stat-label">STREAK</span><strong id="boxing-streak">0</strong></div>
+            </div>
+
+          </section>
+
+          <div id="boxing-action" class="boxing-action" role="status" aria-live="assertive" aria-atomic="true" hidden>
+            <span class="boxing-action-alert" aria-hidden="true">!</span>
+            <span id="boxing-action-arrow" class="boxing-action-arrow" aria-hidden="true">←</span>
+            <strong id="boxing-action-label">Dodge Left</strong>
+            <span id="boxing-action-timing">NOW!</span>
+          </div>
+
+          <section id="round-end-screen" class="flying-end-screen" role="dialog" aria-modal="true" aria-labelledby="round-end-title" hidden>
+            <div class="flying-end-card">
+              <div class="flying-end-eyebrow">WELL DONE</div>
+              <h2 id="round-end-title">Round Complete</h2>
+              <p id="round-end-result"></p>
+              <p class="end-motion-tip">Hover your hand over a button to select.</p>
+              <div class="flying-end-actions">
+                <button id="btn-round-restart" class="flying-end-action-btn primary motion-target" type="button">Restart</button>
+                <button id="btn-round-menu" class="flying-end-action-btn secondary motion-target" type="button">Main Menu</button>
+              </div>
+            </div>
           </section>
 
           <!-- Flying Adventure Stage Elements (Large Full-Screen Flight Mode) -->
@@ -222,7 +261,7 @@
           <section id="flying-hud" class="flying-hud" aria-label="Flight status" hidden>
             <div class="flying-stats-row">
               <div class="stat-pill"><span class="stat-label">RACE TIME</span><strong id="flying-time">01:00</strong></div>
-              <div class="stat-pill"><span class="stat-label">RINGS CLEARED</span><strong id="flying-score">0</strong></div>
+              <div class="stat-pill"><span class="stat-label">SCORE</span><strong id="flying-score">0</strong></div>
               <div class="stat-pill"><span class="stat-label">COMBO</span><strong id="flying-combo">0x</strong></div>
               <button type="button" id="flying-launch-btn" class="flying-launch-btn motion-target">Start Flight Run</button>
             </div>
@@ -247,21 +286,22 @@
           <section id="flying-end-screen" class="flying-end-screen" aria-labelledby="flying-end-title" hidden>
             <div class="flying-end-card">
               <div class="flying-end-eyebrow">FLIGHT COMPLETE</div>
-              <h2 id="flying-end-title">Skyway Cleared!</h2>
+              <h2 id="flying-end-title">Round Complete</h2>
               <p id="flying-end-result">0 rings · 0 points · best 0</p>
               <p class="flying-end-tip">Great flight! Move your arms to soar again, or return to the menu.</p>
+              <p class="end-motion-tip">Hover your hand over a button to select.</p>
               <div class="flying-end-actions">
                 <button type="button" id="btn-flying-replay" class="flying-end-action-btn primary motion-target">
                   <span class="btn-icon">↻</span>
                   <div class="btn-text">
-                    <b>Fly Again</b>
+                    <b>Restart</b>
                     <small>Take to the skies</small>
                   </div>
                 </button>
                 <button type="button" id="btn-flying-menu" class="flying-end-action-btn secondary motion-target">
                   <span class="btn-icon">⌂</span>
                   <div class="btn-text">
-                    <b>Return to Menu</b>
+                    <b>Main Menu</b>
                     <small>Choose another activity</small>
                   </div>
                 </button>
@@ -296,21 +336,22 @@
           <section id="stretching-end-screen" class="stretching-end-screen" aria-labelledby="stretching-end-title" hidden>
             <div class="stretching-end-card">
               <div class="stretching-end-eyebrow">ADVENTURE COMPLETE</div>
-              <h2 id="stretching-end-title">Launch Pad Reached!</h2>
-              <p id="stretching-end-result">Sector 03 Cleared · All 8 Steps Completed</p>
+              <h2 id="stretching-end-title">Round Complete</h2>
+              <p id="stretching-end-result">All 3 sectors cleared · Thrusters powered</p>
               <p class="stretching-end-tip">Moshi is fully calibrated and prepped for takeoff! Great job maintaining healthy motion.</p>
+              <p class="end-motion-tip">Hover your hand over a button to select.</p>
               <div class="stretching-end-actions">
                 <button type="button" id="btn-stretching-replay" class="stretching-end-action-btn primary motion-target">
                   <span class="btn-icon">↻</span>
                   <div class="btn-text">
-                    <b>Play Again</b>
+                    <b>Restart</b>
                     <small>Restart from Sector 01</small>
                   </div>
                 </button>
                 <button type="button" id="btn-stretching-menu" class="stretching-end-action-btn secondary motion-target">
                   <span class="btn-icon">⌂</span>
                   <div class="btn-text">
-                    <b>Return to Menu</b>
+                    <b>Main Menu</b>
                     <small>Choose another activity</small>
                   </div>
                 </button>
@@ -319,23 +360,11 @@
           </section>
         </section>
 
-        <!-- Control Aside -->
-        <aside class="game-aside">
+        <!-- Hidden controls retained for camera lifecycle and game state -->
+        <div id="game-controls" hidden inert style="display: none">
           <h2 class="aside-mirror-title" id="game-aside-title">Watch Moshi Mirror Your Every Move!</h2>
 
-          <div class="camera">
-            <canvas id="game-camera-canvas"></canvas>
-            <canvas id="overlay"></canvas>
-            <div id="camera-placeholder"></div>
-          </div>
-
-          <div id="status" role="status" aria-live="polite">Loading Moshi</div>
-
           <section id="boxing-panel" class="boxing-panel" aria-label="Boxing Beat controls" hidden>
-            <div class="boxing-score-row">
-              <div><span class="boxing-stat-label">SCORE</span><strong id="boxing-score">0</strong></div>
-              <div><span class="boxing-stat-label">STREAK</span><strong id="boxing-streak">0</strong></div>
-            </div>
             <p id="boxing-help">Start the camera, stand centered, then match the move cue as it reaches NOW.</p>
             <button id="boxing-start-round" class="boxing-start-round" type="button">Start 45-second round</button>
             <div class="boxing-move-key" aria-label="Move guide">
@@ -358,7 +387,7 @@
 
           <!-- Stretching Adventure Aside Panel -->
           <section id="stretching-panel" class="stretching-panel" aria-label="Stretching controls" hidden>
-            <p id="stretching-help">Move comfortably in your range of motion. Stand centered or seated.</p>
+            <p id="stretching-help">Move comfortably in your range of motion. Follow the reach, lean, march, and shallow squat cues.</p>
             <button id="stretching-skip-btn" class="stretching-skip-btn" type="button">Skip current movement</button>
             <div class="stretching-move-key" aria-label="Stretching guide">
               <span>Reach left &amp; right</span><span>Extend arms wide</span><span>Lean torso</span><span>March in place</span>
@@ -376,7 +405,7 @@
           <div class="motion-return-tip">
             <p>Tip: Cross your hands in an 'X' shape or press <kbd>Esc</kbd> to return to menu.</p>
           </div>
-        </aside>
+        </div>
       </div>
     </main>
 

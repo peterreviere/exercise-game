@@ -46,3 +46,18 @@ test('robot greeting wave raises arm and maintains valid finite quaternions',asy
  const forearmDir=hand.getWorldPosition(new Vector3()).sub(bone.getWorldPosition(new Vector3())).normalize();
  assert.ok(forearmDir.y > 0.5, 'waving forearm should be raised up');
 });
+
+test('stretch mirror maps the player right hand to the robot left hand', async () => {
+ const r = new RobotRetargeter(await load());
+ const points = Array.from({length:33}, () => ({x:0,y:0,z:0,visibility:0}));
+ points[12]={x:-.2,y:-.4,z:0,visibility:1};
+ points[14]={x:-.4,y:-.7,z:0,visibility:1};
+ points[16]={x:-.45,y:-1,z:0,visibility:1};
+ for(let i=0;i<120;i++) r.apply(points,1/60,false,true);
+ const upper=r.bind.get('upper_armL').bone;
+ const fore=r.bind.get('forearmL').bone;
+ const direction=fore.getWorldPosition(new Vector3()).sub(upper.getWorldPosition(new Vector3())).normalize();
+ assert.ok(direction.x>.4 && direction.y>.7, 'mirrored right hand should lift the robot left arm');
+ const right=r.bind.get('upper_armR');
+ assert.ok(right.bone.quaternion.angleTo(right.local)<.001, 'other arm stays at rest');
+});
