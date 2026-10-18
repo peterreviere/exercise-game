@@ -7,6 +7,9 @@
   <title>umove · Accessible Exercise Games</title>
   <meta name="description"
     content="Accessibility-focused motion exercise games with sitting and standing modes, dual hand cursors, real-time pose tracking, and hands-free gesture navigation.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 
 <body data-theme="standard" data-color="blue" data-posture="standing" data-motion="standard" data-view="carousel"
@@ -208,14 +211,62 @@
             <div id="boxing-cue-list" class="boxing-cue-list" aria-live="off"></div>
           </section>
 
-          <!-- Flying Game HUD Overlay -->
+          <!-- Flying Adventure Stage Elements (Large Full-Screen Flight Mode) -->
+          <div id="flying-stage-copy" class="flight-stage-copy" hidden>
+            <div class="flight-eyebrow">GAME 02 / SOLO SKY RUN</div>
+            <h1>Spread your wings.<br><em>Own the sky.</em></h1>
+          </div>
+          <div id="flying-horizon" class="flight-horizon" aria-hidden="true" hidden></div>
+
+          <!-- Flying Game HUD Overlay (Top-Center) -->
           <section id="flying-hud" class="flying-hud" aria-label="Flight status" hidden>
             <div class="flying-stats-row">
-              <div class="stat-pill"><span>FLIGHT TIME</span><strong id="flying-time">01:00</strong></div>
-              <div class="stat-pill"><span>RINGS</span><strong id="flying-score">0</strong></div>
-              <div class="stat-pill"><span>COMBO</span><strong id="flying-combo">0x</strong></div>
+              <div class="stat-pill"><span class="stat-label">RACE TIME</span><strong id="flying-time">01:00</strong></div>
+              <div class="stat-pill"><span class="stat-label">RINGS CLEARED</span><strong id="flying-score">0</strong></div>
+              <div class="stat-pill"><span class="stat-label">COMBO</span><strong id="flying-combo">0x</strong></div>
+              <button type="button" id="flying-launch-btn" class="flying-launch-btn motion-target">Start Flight Run</button>
             </div>
-            <div class="flight-boost-bar"><i id="flight-boost-fill"></i></div>
+          </section>
+
+          <!-- Flying Pilot Strip (Bottom-Left) -->
+          <div id="flying-player-strip" class="flight-player-strip" aria-label="Flight score" hidden>
+            <article class="flight-player-card blue active">
+              <div class="flight-pilot-info">
+                <b>01</b>
+                <span>PILOT</span>
+                <em id="pilot-state-badge">READY</em>
+              </div>
+              <strong class="flight-score-number" id="flight-score-number">0000</strong>
+              <div class="flight-boost-container">
+                <i id="flight-boost-meter-fill"></i>
+              </div>
+            </article>
+          </div>
+
+          <!-- Flying Flight Complete Overlay -->
+          <section id="flying-end-screen" class="flying-end-screen" aria-labelledby="flying-end-title" hidden>
+            <div class="flying-end-card">
+              <div class="flying-end-eyebrow">FLIGHT COMPLETE</div>
+              <h2 id="flying-end-title">Skyway Cleared!</h2>
+              <p id="flying-end-result">0 rings · 0 points · best 0</p>
+              <p class="flying-end-tip">Great flight! Move your arms to soar again, or return to the menu.</p>
+              <div class="flying-end-actions">
+                <button type="button" id="btn-flying-replay" class="flying-end-action-btn primary motion-target">
+                  <span class="btn-icon">↻</span>
+                  <div class="btn-text">
+                    <b>Fly Again</b>
+                    <small>Take to the skies</small>
+                  </div>
+                </button>
+                <button type="button" id="btn-flying-menu" class="flying-end-action-btn secondary motion-target">
+                  <span class="btn-icon">⌂</span>
+                  <div class="btn-text">
+                    <b>Return to Menu</b>
+                    <small>Choose another activity</small>
+                  </div>
+                </button>
+              </div>
+            </div>
           </section>
 
           <!-- Stretching Game HUD Overlay -->

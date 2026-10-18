@@ -269,12 +269,39 @@ function renderFlightUI() {
   const ss = String(timeLeftSec % 60).padStart(2, '0');
   if ($('flying-time')) $('flying-time').textContent = `${mm}:${ss}`;
   if ($('flying-score')) $('flying-score').textContent = String(flightRace.score);
+  if ($('flight-score-number')) $('flight-score-number').textContent = String(flightRace.score).padStart(4, '0');
   if ($('flying-combo')) $('flying-combo').textContent = `${flightRace.combo}x`;
   if ($('flying-panel-rings')) $('flying-panel-rings').textContent = String(flightRace.rings);
-  if ($('flight-boost-fill')) {
-    const boostPct = Math.round(((flightAltitude - (-0.35)) / (1.65 - (-0.35))) * 100);
-    $('flight-boost-fill').style.width = `${Math.max(10, Math.min(100, boostPct))}%`;
+
+  const boostPct = Math.round(((flightAltitude - (-0.35)) / (1.65 - (-0.35))) * 100);
+  const clampedBoost = Math.max(8, Math.min(100, boostPct));
+  if ($('flight-boost-fill')) $('flight-boost-fill').style.width = `${clampedBoost}%`;
+  if ($('flight-boost-meter-fill')) $('flight-boost-meter-fill').style.width = `${clampedBoost}%`;
+
+  if ($('pilot-state-badge')) {
+    $('pilot-state-badge').textContent = flightRace.phase === 'flying'
+      ? (currentFlightInput.gliding ? 'GLIDING' : 'AIRBORNE')
+      : 'READY';
   }
+  if ($('flying-launch-btn')) {
+    $('flying-launch-btn').textContent = flightRace.phase === 'flying' ? 'In Flight…' : 'Start Flight Run';
+  }
+}
+
+function showFlightEndScreen(result) {
+  let best = result.score;
+  try {
+    best = Math.max(result.score, Number(localStorage.getItem('robot-skyway-best')) || 0);
+    localStorage.setItem('robot-skyway-best', String(best));
+  } catch {}
+  if ($('flying-end-result')) {
+    $('flying-end-result').textContent = `${result.rings} rings cleared · ${result.score} points · best: ${best}`;
+  }
+  if ($('flying-end-screen')) $('flying-end-screen').hidden = false;
+}
+
+function hideFlightEndScreen() {
+  if ($('flying-end-screen')) $('flying-end-screen').hidden = true;
 }
 
 // ============================================================================
@@ -1380,12 +1407,16 @@ function configureActiveGame() {
   $('boxing-panel').hidden = !isBoxing;
 
   flyingGroup.visible = isFlying;
-  $('flying-hud').hidden = !isFlying;
-  $('flying-panel').hidden = !isFlying;
+  if ($('flying-hud')) $('flying-hud').hidden = !isFlying;
+  if ($('flying-stage-copy')) $('flying-stage-copy').hidden = !isFlying;
+  if ($('flying-horizon')) $('flying-horizon').hidden = !isFlying;
+  if ($('flying-player-strip')) $('flying-player-strip').hidden = !isFlying;
+  hideFlightEndScreen();
+  if ($('flying-panel')) $('flying-panel').hidden = !isFlying;
 
   stretchingGroup.visible = isStretching;
-  $('stretching-hud').hidden = !isStretching;
-  $('stretching-panel').hidden = !isStretching;
+  if ($('stretching-hud')) $('stretching-hud').hidden = !isStretching;
+  if ($('stretching-panel')) $('stretching-panel').hidden = !isStretching;
 
   $('view-game').dataset.game = isBoxing ? 'boxing-beat' : isFlying ? 'flying' : isStretching ? 'stretching' : '';
   $('view-game').setAttribute('aria-label', `Active Game: ${activeGame.title}`);
@@ -1578,11 +1609,15 @@ function returnToCarousel() {
   boxingImpactAt = -Infinity;
   boxingImpact.visible = false;
   flyingGroup.visible = false;
-  $('flying-hud').hidden = true;
-  $('flying-panel').hidden = true;
+  if ($('flying-hud')) $('flying-hud').hidden = true;
+  if ($('flying-stage-copy')) $('flying-stage-copy').hidden = true;
+  if ($('flying-horizon')) $('flying-horizon').hidden = true;
+  if ($('flying-player-strip')) $('flying-player-strip').hidden = true;
+  hideFlightEndScreen();
+  if ($('flying-panel')) $('flying-panel').hidden = true;
   stretchingGroup.visible = false;
-  $('stretching-hud').hidden = true;
-  $('stretching-panel').hidden = true;
+  if ($('stretching-hud')) $('stretching-hud').hidden = true;
+  if ($('stretching-panel')) $('stretching-panel').hidden = true;
   if (robotWingsModel) robotWingsModel.visible = false;
   clearActiveProp();
   flightRace.reset();
@@ -1609,6 +1644,10 @@ function launchActiveGame() {
   soundEffects.playSelect();
   configureActiveGame();
   showView('game');
+  requestAnimationFrame(() => resize());
+  if (activeGame.gameType === 'flying') {
+    startFlightRun();
+  }
   status(`Entered ${activeGame.title}. Move to begin exercise.`);
 }
 
@@ -1616,19 +1655,30 @@ $('btn-details-back').onclick = returnToCarousel;
 $('btn-start-game').onclick = launchActiveGame;
 $('btn-back-to-carousel').onclick = returnToCarousel;
 
-$('flying-start-round').onclick = () => {
+function startFlightRun() {
   soundEffects.playSelect();
+  hideFlightEndScreen();
   flightRace.start(performance.now());
   resetFlightCourse();
+  wingController.reset();
+  if (robotWingRig) robotWingRig.reset(true);
   flightAltitude = 0.6;
   flightVerticalVelocity = 0;
+  lastFlapVisualAt = -Infinity;
   renderFlightUI();
-  status('Airborne! Flap arms downward to climb, lean to steer through rings.');
-};
+  status('You are airborne! Flap arms downward to gain altitude, lean to steer.');
+}
 
-$('stretching-skip-btn').onclick = () => {
-  skipStretchingStep();
-};
+if ($('flying-launch-btn')) $('flying-launch-btn').onclick = startFlightRun;
+if ($('flying-start-round')) $('flying-start-round').onclick = startFlightRun;
+if ($('btn-flying-replay')) $('btn-flying-replay').onclick = startFlightRun;
+if ($('btn-flying-menu')) $('btn-flying-menu').onclick = returnToCarousel;
+
+if ($('stretching-skip-btn')) {
+  $('stretching-skip-btn').onclick = () => {
+    skipStretchingStep();
+  };
+}
 
 // ============================================================================
 // Carousel Component (Symmetrical: 1 Left, Center, 1 Right)
@@ -3152,6 +3202,7 @@ function animate(now) {
     if (raceResult) {
       soundEffects.playComplete();
       status(`Flight complete! Score: ${raceResult.score} (${raceResult.rings} rings).`);
+      showFlightEndScreen(raceResult);
     }
 
     renderFlightUI();
