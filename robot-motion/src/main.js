@@ -464,7 +464,7 @@ async function startCamera() {
     }
     const chipOn = $('motion-indicator-chip');
     if (chipOn) chipOn.classList.add('active');
-    setStatusText(`Motion Active (Standing mode) · Hover cursor to select, cross hands in X to go back`);
+    setStatusText(`Motion Active · Hover cursor to select, cross hands in X to go back`);
   } catch (err) {
     if (current !== epoch) return;
     stopCamera();
