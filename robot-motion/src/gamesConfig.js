@@ -44,4 +44,35 @@ export const GAMES_CONFIG = [
     isPlayable: true,
     gameType: 'boxing-beat',
   },
+
+  // Added: Flying Adventure
+  {
+    id: 'flying-game',
+    title: 'Flying Adventure',
+    subtitle: 'Arm-powered flight & reach',
+    description: 'Flap your arms and reach upward to steer through floating rings — great for upper-body cardio and posture.',
+    status: 'Playable',
+    focus: 'Upper Body · Coordination',
+    intensity: 'Medium',
+    players: '1',
+    image: `${import.meta.env.BASE_URL}finished-robot/public/video/game2_intro_poster.png`,
+    gameType: 'flying',
+    isPlayable: true,
+  },
+
+  // Added: Stretch & Flow
+  {
+    id: 'stretching-game',
+    title: 'Stretch & Flow',
+    subtitle: 'Gentle mobility and breath',
+    description: 'Guided stretches and hold poses designed for mobility and cooldown. Uses held poses and slow reaches.',
+    status: 'Playable',
+    focus: 'Flexibility · Recovery',
+    intensity: 'Low',
+    players: '1',
+    image: `${import.meta.env?.BASE_URL || './'}robot/preview.png`,
+    gameType: 'stretching',
+    isPlayable: true,
+  },
+
 ];
