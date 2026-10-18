@@ -455,7 +455,7 @@ async function startCamera() {
     if (camBtnText) camBtnText.textContent = 'Stop Camera';
 
     // Update welcome camera status
-    if (welcomeCamMsg) welcomeCamMsg.textContent = 'Camera active! Wave to me and I will wave back!';
+    if (welcomeCamMsg) welcomeCamMsg.textContent = 'Camera active!';
     if (welcomeCamDot) welcomeCamDot.className = 'cam-status-dot active';
 
     // Show mini camera HUD if not in game view
@@ -1876,6 +1876,8 @@ function drawLandmarksAndVideo(points) {
       if (gameCamCanvas.width !== video.videoWidth) {
         gameCamCanvas.width = video.videoWidth;
         gameCamCanvas.height = video.videoHeight;
+        overlay.width = video.videoWidth;
+        overlay.height = video.videoHeight;
       }
       const gameCtx = gameCamCanvas.getContext('2d');
       gameCtx.save();
@@ -1888,14 +1890,19 @@ function drawLandmarksAndVideo(points) {
 
   if (!points) return;
 
-  // 2. Draw landmarks on game aside overlay
+  // 2. Draw landmarks on game aside overlay (mirrored to match mirrored video)
   ctx.strokeStyle = '#0284c7';
   ctx.lineWidth = 2.5;
   for (const [a, b] of DETAILED_POSE_CONNECTIONS) {
     if ((points[a].visibility ?? 0) < 0.5 || (points[b].visibility ?? 0) < 0.5) continue;
+    const ax = (1 - points[a].x) * overlay.width;
+    const ay = points[a].y * overlay.height;
+    const bx = (1 - points[b].x) * overlay.width;
+    const by = points[b].y * overlay.height;
+
     ctx.beginPath();
-    ctx.moveTo(points[a].x * overlay.width, points[a].y * overlay.height);
-    ctx.lineTo(points[b].x * overlay.width, points[b].y * overlay.height);
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
     ctx.stroke();
   }
 

@@ -519,4 +519,22 @@ test('13. robot demo view cleanups: auto-legs tracking, removal of tips and came
   assert.ok(gameViewHtml.includes('Watch Moshi Mirror Your Every Move!'), 'Watch Moshi Mirror Your Every Move! heading must be present');
 });
 
+test('14. camera aside skeleton overlay mirrors coordinates horizontally to match the mirrored camera video feed', () => {
+  const mainJs = readFileSync(new URL('../src/main.js', import.meta.url), 'utf-8');
+
+  // Verify that both game camera canvas and its skeleton overlay mirror X coordinates
+  assert.ok(mainJs.includes('gameCtx.scale(-1, 1);'), 'Game camera canvas must mirror video horizontally');
+  assert.ok(
+    mainJs.includes('(1 - points[a].x) * overlay.width') &&
+    mainJs.includes('(1 - points[b].x) * overlay.width'),
+    'Skeleton overlay on game aside must mirror X coordinates (1 - points[i].x) to match mirrored video'
+  );
+  assert.ok(
+    mainJs.includes('overlay.width = video.videoWidth;') &&
+    mainJs.includes('overlay.height = video.videoHeight;'),
+    'Overlay canvas dimensions must stay synced with video and gameCamCanvas'
+  );
+});
+
+
 
