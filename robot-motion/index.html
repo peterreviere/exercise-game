@@ -179,7 +179,7 @@
     <!-- =====================================================================
          MAIN VIEW 3: GAME VIEW (Features the Existing Robot Motion Interface)
          ===================================================================== -->
-    <main id="view-game" class="view-hidden" aria-label="Active Game: Robot Mirror Buddy">
+    <main id="view-game" class="view-hidden" aria-label="Active movement game">
       <div class="game-view-header">
         <button type="button" id="btn-back-to-carousel" class="btn-back motion-target"
           title="Return to activity carousel">
@@ -205,6 +205,13 @@
             <span id="pose">Ready when you are</span>
             <span id="mode-badge-text">LIVE 3D · MIRROR MOTION</span>
           </div>
+          <section id="boxing-forecast" class="boxing-forecast" aria-label="Upcoming boxing moves" hidden>
+            <div class="boxing-forecast-heading">
+              <span id="boxing-round-clock">45 SEC ROUND</span>
+              <span id="boxing-round-feedback" aria-live="polite">Start a round when you are ready</span>
+            </div>
+            <div id="boxing-cue-list" class="boxing-cue-list" aria-live="off"></div>
+          </section>
         </section>
 
         <!-- The Existing Control Aside -->
@@ -221,6 +228,18 @@
           </div>
 
           <div id="status" role="status" aria-live="polite">Loading Moshi</div>
+
+          <section id="boxing-panel" class="boxing-panel" aria-label="Boxing Beat controls" hidden>
+            <div class="boxing-score-row">
+              <div><span class="boxing-stat-label">SCORE</span><strong id="boxing-score">0</strong></div>
+              <div><span class="boxing-stat-label">STREAK</span><strong id="boxing-streak">0</strong></div>
+            </div>
+            <p id="boxing-help">Start the camera, stand centered, then match the move cue as it reaches NOW.</p>
+            <button id="boxing-start-round" class="boxing-start-round" type="button">Start 45-second round</button>
+            <div class="boxing-move-key" aria-label="Move guide">
+              <span>Lean left / right</span><span>Extend one fist forward</span><span>Duck down</span><span>Raise both fists to block</span>
+            </div>
+          </section>
 
           <div class="button-group">
             <button id="start" class="motion-target" disabled>Start camera</button>

@@ -33,15 +33,15 @@ export const GAMES_CONFIG = [
   },
   {
     id: 'robot-buddy-3',
-    title: 'Robot Mirror Buddy (Slot 3)',
-    subtitle: 'Calm Breathing & Gentle Poses Slot',
-    description: 'Test slot for future exercise games. Easy to extend with new activities in the games configuration framework.',
-    status: 'Test Card 3',
+    title: 'Boxing Beat',
+    subtitle: 'A follow-the-cues boxing rhythm game',
+    description: 'Read the upcoming move cues and match them to the beat. Lean left or right, throw a left or right punch, duck, or block using your webcam-tracked pose.',
+    status: 'Ready to Play',
     image: `${import.meta.env?.BASE_URL || './'}robot/preview.png`,
-    intensity: 'Low Strain',
-    focus: 'Trunk & Core',
-    tags: ['Test Slot', 'Mindful Movement', 'Low Strain'],
+    intensity: 'Moderate (Adjustable Pace)',
+    focus: 'Coordination & Full Body',
+    tags: ['Rhythm Game', 'Boxing Moves', 'Pose Tracking'],
     isPlayable: true,
+    gameType: 'boxing-beat',
   },
 ];
-

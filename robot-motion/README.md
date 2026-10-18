@@ -42,10 +42,23 @@ Use the Local URL printed in the terminal, normally http://127.0.0.1:5173. If th
 - **Try demo** moves the actual rig without accessing the camera.
 - **Start camera** asks for webcam access, then loads the bundled MediaPipe model.
 - Stand back far enough to show shoulders, elbows, wrists, and hips. Raise your arms, reach sideways or forward, bend your elbows, or lean.
-- The robot follows in mirror mode, matching the mirrored camera preview. No calibration is needed.
+- The robot follows the flipped tracked pose, with the arm sides swapped independently of the body. No calibration is needed.
 - **Follow legs too** enables hip/knee/ankle tracking when your entire body is visible. Leave it off for seated or upper-body use.
 - Low-confidence limbs ease back toward the rest pose. Tracking loss eases the robot back to neutral.
 - **Stop** releases the webcam. The app never requests microphone access.
+
+## Boxing Beat (Slot 3)
+
+Choose **Boxing Beat** from the activity carousel and start the camera. Start a 45-second round when your shoulders and hips are visible; the first tracked pose calibrates your center. Follow the four-move forecast at the bottom of the stage when a cue reaches **NOW**:
+
+- Lean your torso left or right while keeping your hips relatively centered.
+- Extend the left or right fist forward for a punch.
+- Lower your shoulders to duck.
+- Raise both hands near your face to block.
+
+Correct moves earn points and build a streak. Moves are detected from pose landmarks locally in the browser; punches use the pose model's world-space depth landmarks.
+Punches are calibrated against your relaxed starting guard. Keep both elbows and wrists in view, push one fist toward the camera, and return it before punching again.
+The player robot turns toward a scripted robot opponent, viewed from just behind the player and above the match. A translucent move forecast sits over the center of the stage; when a move is detected, its cue card turns into the confirmation. The opponent's swings extend toward the player: successful dodges/block make it visibly miss, missed defenses recoil the player and mark the cue as a hit, and successful punches knock the opponent back with an impact flash.
 
 Camera processing stays in the browser. No frames or landmarks are uploaded or recorded. All runtime model/WASM/robot assets are bundled locally; there are no external fonts, CDNs or analytics.
 
@@ -76,4 +89,4 @@ npm run preview -- --open
 - `public/robot/blue_robot.glb`: rigged robot, embedded PBR materials, no animation clips.
 - `tests/`: tests using the real exported robot and synthetic landmark input. These do not substitute for a human webcam trial.
 
-This is a standalone motion demo, not a game. Head expression and fingers are static; arms, torso and optional legs follow tracking. The Blender source remains in the sibling `assets/blue-robot` directory in the workspace.
+Robot Mirror Buddy is a standalone motion activity; Boxing Beat is the follow-the-cues game in Slot 3. Head expression and fingers are static; arms, torso and optional legs follow tracking. The Blender source remains in the sibling `assets/blue-robot` directory in the workspace.

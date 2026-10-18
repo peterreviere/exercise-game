@@ -22,17 +22,18 @@ test('low visibility and lost body data do not create invalid rotations',async()
  const r=new RobotRetargeter(await load());const p=Array.from({length:33},()=>({x:0,y:0,z:0,visibility:0}));
  r.apply(p,.016,true);for(const {bone}of r.bind.values())assert.ok(bone.quaternion.toArray().every(Number.isFinite));
 });
-test('camera landmark mapping raises the mirrored arm and returns invisible arms to rest',async()=>{
+test('camera landmark mapping flips arm sides and returns invisible arms to rest',async()=>{
  const r=new RobotRetargeter(await load());
  const p=Array.from({length:33},()=>({x:0,y:0,z:0,visibility:0}));
  p[12]={x:-.2,y:-.4,z:0,visibility:1};p[14]={x:-.4,y:-.7,z:0,visibility:1};p[16]={x:-.45,y:-1,z:0,visibility:1};
  for(let i=0;i<120;i++)r.apply(p,1/60);
- const upper=r.bind.get('upper_armL').bone, fore=r.bind.get('forearmL').bone;
+ const upper=r.bind.get('upper_armR').bone, fore=r.bind.get('forearmR').bone;
  const direction=fore.getWorldPosition(new Vector3()).sub(upper.getWorldPosition(new Vector3())).normalize();
- assert.ok(direction.x>.4 && direction.y>.7,'mirrored right camera arm should lift robot left arm');
+ assert.ok(direction.x<-.4 && direction.y>.7,'flipped tracked right arm should raise the robot right arm');
+ assert.ok(r.bind.get('upper_armL').bone.quaternion.angleTo(r.bind.get('upper_armL').local)<.001,'left arm should stay at rest for right-arm tracking');
  p.forEach(point=>point.visibility=0);
  for(let i=0;i<120;i++)r.apply(p,1/60);
- assert.ok(upper.quaternion.angleTo(r.bind.get('upper_armL').local)<.001);
+ assert.ok(upper.quaternion.angleTo(r.bind.get('upper_armR').local)<.001);
 });
 test('robot greeting wave raises arm and maintains valid finite quaternions',async()=>{
  const r=new RobotRetargeter(await load());
@@ -45,4 +46,3 @@ test('robot greeting wave raises arm and maintains valid finite quaternions',asy
  const forearmDir=hand.getWorldPosition(new Vector3()).sub(bone.getWorldPosition(new Vector3())).normalize();
  assert.ok(forearmDir.y > 0.5, 'waving forearm should be raised up');
 });
-

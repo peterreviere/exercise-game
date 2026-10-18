@@ -31,8 +31,8 @@ export class RobotRetargeter {
   apply(points, dt, legs=false) {
     const alpha=1-Math.exp(-12*dt);
     const valid=(i)=>points[i] && (points[i].visibility??1)>.55;
-    // Mirror the tracked subject; swap sides so limbs stay on their natural side.
-    const p=i=>new Vector3(-points[i].x,-points[i].y,-points[i].z);
+    // Flip horizontal pose coordinates; arm sides are mapped independently below.
+    const p=i=>new Vector3(points[i].x,-points[i].y,-points[i].z);
     const segment=(name,a,b)=>{
       if(valid(a)&&valid(b)) this.point(name,p(b).sub(p(a)),alpha);
       else {const bind=this.bind.get(name);if(bind)bind.bone.quaternion.slerp(bind.local,alpha);}
@@ -41,7 +41,7 @@ export class RobotRetargeter {
       const up=p(11).add(p(12)).sub(p(23)).sub(p(24));
       this.point('chest',up,alpha);
     }
-    for(const [side,shoulder,elbow,wrist,hip,knee,ankle] of [['L',12,14,16,24,26,28],['R',11,13,15,23,25,27]]) {
+    for(const [side,shoulder,elbow,wrist,hip,knee,ankle] of [['L',11,13,15,23,25,27],['R',12,14,16,24,26,28]]) {
       segment('upper_arm'+side,shoulder,elbow);
       segment('forearm'+side,elbow,wrist);
       if(legs){segment('thigh'+side,hip,knee);segment('shin'+side,knee,ankle);}
@@ -66,4 +66,3 @@ export class RobotRetargeter {
     this.point('forearmR', new Vector3(-0.35, -0.65, 0.1), 0.15);
   }
 }
-

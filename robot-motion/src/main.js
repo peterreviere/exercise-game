@@ -7,6 +7,8 @@ import { PoseClassifier } from './vendor/PoseClassifier.js';
 import { RobotRetargeter } from './retarget.js';
 import { GAMES_CONFIG } from './gamesConfig.js';
 import { soundEffects } from './audioFeedback.js';
+import { BoxingRound, PunchMotionDetector, calibrateBoxingPose, detectBoxingMove } from './boxingGame.js';
+import { BoxingOpponent } from './boxingOpponent.js';
 
 // DOM Utilities
 const $ = (id) => document.getElementById(id);
@@ -77,6 +79,15 @@ let activeSelectingHand = (storedHand === 'left' || storedHand === 'right' || st
 
 let swipeCooldownUntil = 0;
 let activeGame = GAMES_CONFIG[0];
+const boxingRound = new BoxingRound();
+const boxingPunchDetector = new PunchMotionDetector();
+let boxingBaseline = null;
+let boxingCueRenderKey = '';
+let boxingRecordedCue = null;
+let playerHitAt = -Infinity;
+let playerHitSide = 0;
+let playerRestPosition = null;
+let playerRestRotationZ = 0;
 
 // Hand Cursors State
 const cursorLeftEl = $('hand-cursor-left');
@@ -136,6 +147,28 @@ $('viewport').append(renderer.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+const playerStage = new THREE.Group();
+playerStage.name = 'Player Stage';
+scene.add(playerStage);
+const boxingOpponent = new BoxingOpponent();
+scene.add(boxingOpponent.group);
+boxingOpponent.group.visible = false;
+const boxingImpact = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(0.22, 1),
+  new THREE.MeshStandardMaterial({
+    color: 0xffd166,
+    emissive: 0xff6b00,
+    emissiveIntensity: 2.5,
+    metalness: 0.25,
+    roughness: 0.25,
+    transparent: true,
+    opacity: 0.95,
+  }),
+);
+boxingImpact.position.set(0, 1.55, 0.05);
+boxingImpact.visible = false;
+scene.add(boxingImpact);
+let boxingImpactAt = -Infinity;
 
 function applyCameraFraming(isSitting) {
   if (isSitting) {
@@ -259,6 +292,16 @@ const THEME_COLORS = {
 
 let currentThemeColor = 'blue';
 let robotInstance = null;
+let playerHeadMaterials = [];
+
+function setPlayerHeadTransparent(transparent) {
+  for (const entry of playerHeadMaterials) {
+    entry.material.transparent = transparent || entry.transparent;
+    entry.material.opacity = transparent ? 0.08 : entry.opacity;
+    entry.material.depthWrite = transparent ? false : entry.depthWrite;
+    entry.material.needsUpdate = true;
+  }
+}
 
 function setStatusText(text) {
   const el = $('motion-status-text');
@@ -314,14 +357,30 @@ new GLTFLoader().load(
   (gltf) => {
     const robot = gltf.scene;
     robotInstance = robot;
+    playerRestPosition = robot.position.clone();
+    playerRestRotationZ = robot.rotation.z;
     robot.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true;
         o.receiveShadow = true;
+        if (o.name === 'Face_white_panel') {
+          const materials = Array.isArray(o.material) ? o.material : [o.material];
+          const playerMaterials = materials.map((material) => {
+            const playerMaterial = material.clone();
+            playerHeadMaterials.push({
+              material: playerMaterial,
+              opacity: material.opacity,
+              transparent: material.transparent,
+              depthWrite: material.depthWrite,
+            });
+            return playerMaterial;
+          });
+          o.material = Array.isArray(o.material) ? playerMaterials : playerMaterials[0];
+        }
       }
     });
     applyRobotTheme(currentThemeColor);
-    scene.add(robot);
+    playerStage.add(robot);
     rig = new RobotRetargeter(robot);
     $('start').disabled = false;
     $('demo').disabled = false;
@@ -346,6 +405,16 @@ function stopCamera() {
   tracker.lastVideoTime = -1;
   mode = 'idle';
   wasTracking = false;
+  boxingRound.reset();
+  boxingPunchDetector.reset();
+  boxingBaseline = null;
+  boxingCueRenderKey = '';
+  boxingRecordedCue = null;
+  playerHitAt = -Infinity;
+  playerHitSide = 0;
+  boxingImpactAt = -Infinity;
+  boxingImpact.visible = false;
+  renderBoxingRound(boxingRound.snapshot(performance.now()));
   pipeline.process(null, performance.now());
   ctx.clearRect(0, 0, overlay.width, overlay.height);
   miniCtx.clearRect(0, 0, miniOverlay.width, miniOverlay.height);
@@ -447,6 +516,7 @@ async function startCamera() {
     mode = 'camera';
     lastSeen = performance.now();
     status(`Camera ready · ${tracker.delegate} tracking · Mirror mode`);
+    renderBoxingRound(boxingRound.snapshot(performance.now()));
 
     // Update header camera toggle
     const camToggleBtn = $('btn-camera-toggle');
@@ -505,6 +575,9 @@ $('demo').onclick = () => {
   }
   stopCamera();
   mode = 'demo';
+  boxingRound.reset();
+  boxingBaseline = null;
+  renderBoxingRound(boxingRound.snapshot(performance.now()));
   $('demo').textContent = 'End demo';
   $('stop').disabled = false;
   $('pose').textContent = 'Demo · no camera';
@@ -660,7 +733,184 @@ function openGameDetails(index) {
   $('carousel-announcement').textContent = `Opened details for ${activeGame.title}. Close hand over Start Activity to begin.`;
 }
 
+function configureActiveGame() {
+  const isBoxing = activeGame.gameType === 'boxing-beat';
+  setPlayerHeadTransparent(isBoxing);
+  playerStage.position.set(0, 0, isBoxing ? -1.12 : 0);
+  playerStage.rotation.set(0, 0, 0);
+  playerStage.scale.setScalar(isBoxing ? 0.88 : 1);
+  playerStage.updateMatrixWorld(true);
+  boxingOpponent.group.visible = isBoxing;
+  boxingOpponent.group.position.set(0, 0, isBoxing ? 1.22 : 0);
+  boxingOpponent.baseZ = isBoxing ? 1.22 : 1.15;
+  boxingOpponent.group.scale.setScalar(isBoxing ? 1.12 : 0.82);
+  $('view-game').dataset.game = isBoxing ? 'boxing-beat' : '';
+  if (isBoxing) {
+    camera.fov = 38;
+    camera.position.set(0, 6.7, -6.4);
+    camera.lookAt(0, 1.25, 0);
+    camera.updateProjectionMatrix();
+  } else {
+    camera.fov = 30;
+    applyCameraFraming(false);
+  }
+  $('view-game').setAttribute('aria-label', `Active Game: ${activeGame.title}`);
+  $('active-game-title').textContent = activeGame.title;
+  $('game-stage-label').textContent = isBoxing ? 'BOXING BEAT · FOLLOW THE CUES' : 'MEET YOUR MOVEMENT BUDDY';
+  $('game-stage-title').innerHTML = isBoxing ? 'Read the move.<br>Move to the beat.' : 'A little robot.<br>Your every move.';
+  $('boxing-forecast').hidden = !isBoxing;
+  $('boxing-panel').hidden = !isBoxing;
+  $('legs-label').hidden = isBoxing;
+  $('aside-instructions').textContent = isBoxing
+    ? 'Match each move as it reaches NOW. Camera tracking stays on this device.'
+    : 'Raise an arm, reach wide, or lean. Moshi follows your movement through your camera.';
+  $('ergonomic-tip').textContent = isBoxing
+    ? 'Keep your shoulders and hips visible so the game can read your torso leans. Use comfortable controlled movements and take a break whenever you need one.'
+    : 'In standing mode, stand centered with your full body in frame for optimal motion tracking.';
+  if (!isBoxing) {
+    boxingRound.reset();
+    boxingPunchDetector.reset();
+    boxingBaseline = null;
+    renderBoxingRound(boxingRound.snapshot(performance.now()));
+  }
+}
+
+function renderBoxingRound(state) {
+  const panel = $('boxing-panel');
+  if (!panel) return;
+  $('boxing-score').textContent = String(state.score);
+  $('boxing-streak').textContent = String(state.streak);
+  $('boxing-round-feedback').textContent = state.feedback;
+  $('boxing-round-clock').textContent = state.active
+    ? `${Math.ceil(state.remainingMs / 1000)} SEC LEFT`
+    : state.feedback.startsWith('Round complete') ? 'ROUND COMPLETE' : '45 SEC ROUND';
+  $('boxing-start-round').disabled = state.active || mode !== 'camera';
+  $('boxing-start-round').textContent = state.active ? 'Round in progress' : 'Start 45-second round';
+  $('boxing-help').textContent = mode !== 'camera'
+    ? 'Start the camera to play. Stand centered in frame to calibrate your movement.'
+    : boxingBaseline
+      ? 'Match each cue at NOW. For punches, push one fist toward the camera, then bring it back to guard.'
+      : 'Stand centered with shoulders, hips, elbows, and wrists visible. The first moments calibrate your guard.';
+
+  if (boxingRecordedCue && !state.cues.some((cue) => cue.index === boxingRecordedCue.index)) {
+    boxingRecordedCue = null;
+  }
+  const cueKey = state.cues.map((cue) => {
+    const result = boxingRecordedCue?.index === cue.index ? boxingRecordedCue.result : '';
+    return `${cue.index}:${cue.state}:${Math.ceil(cue.inMs / 1000)}:${result}`;
+  }).join('|');
+  if (cueKey === boxingCueRenderKey) return;
+  boxingCueRenderKey = cueKey;
+  const cueList = $('boxing-cue-list');
+  cueList.replaceChildren(...state.cues.map((cue, index) => {
+    const card = document.createElement('div');
+    card.className = `boxing-cue boxing-cue-${cue.state}`;
+    const result = boxingRecordedCue?.index === cue.index ? boxingRecordedCue.result : '';
+    const wasRecorded = result === 'recorded';
+    const wasHit = result === 'hit';
+    if (wasRecorded) card.classList.add('boxing-cue-recorded');
+    if (wasHit) card.classList.add('boxing-cue-hit');
+    card.setAttribute('aria-label', wasHit
+      ? `${cue.label}, hit`
+      : wasRecorded
+        ? `${cue.label} recorded`
+      : `${index === 0 ? 'Now' : `Coming up ${index}`}: ${cue.label}`);
+    const mark = document.createElement('span');
+    mark.className = 'boxing-cue-mark';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.textContent = cue.mark;
+    const label = document.createElement('strong');
+    label.textContent = wasHit ? `${cue.label} HIT` : wasRecorded ? `${cue.label} RECORDED` : cue.label;
+    const opponentLabel = document.createElement('span');
+    opponentLabel.className = 'boxing-cue-opponent';
+    opponentLabel.textContent = wasHit ? 'GUARD MISSED' : wasRecorded ? 'GREAT MOVE' : cue.opponentLabel;
+    const timing = document.createElement('small');
+    timing.textContent = wasHit
+      ? 'HIT'
+      : wasRecorded
+        ? 'MOVE DETECTED'
+      : cue.state === 'now'
+      ? (state.active ? 'NOW' : 'READY')
+      : cue.state === 'done' ? 'DONE' : `${Math.ceil(cue.inMs / 1000)} SEC`;
+    card.append(mark, label, opponentLabel, timing);
+    return card;
+  }));
+}
+
+function showBoxingImpact(now) {
+  boxingImpactAt = now;
+  boxingImpact.visible = true;
+  boxingImpact.scale.setScalar(0.45);
+}
+
+function handleBoxingRoundEvents(state, now) {
+  if (state.recordedMove) {
+    const move = state.recordedMove;
+    boxingRecordedCue = { index: state.recordedCueIndex, result: 'recorded' };
+    if (move === 'punch-left' || move === 'punch-right') {
+      boxingOpponent.receiveHit(now, move);
+      showBoxingImpact(now);
+      state.feedback = `Clean hit! ${move === 'punch-left' ? 'Left' : 'Right'} punch landed`;
+      boxingRound.feedback = state.feedback;
+    } else {
+      boxingOpponent.dodgeAttack(now, move);
+      state.feedback = 'Clean dodge! The punch missed';
+      boxingRound.feedback = state.feedback;
+    }
+  }
+
+  for (const missed of state.missedCues) {
+    if (!missed.wasHit) continue;
+    boxingRecordedCue = { index: missed.index, result: 'hit' };
+    playerHitAt = now;
+    playerHitSide = missed.move === 'move-left' ? 1 : missed.move === 'move-right' ? -1 : 0;
+    boxingOpponent.receiveHit(now, missed.move);
+    showBoxingImpact(now);
+    state.feedback = 'You got hit! Move sooner next time';
+    boxingRound.feedback = state.feedback;
+  }
+
+  if (state.recordedMove || state.missedCues.length) boxingCueRenderKey = '';
+}
+
+$('boxing-start-round').onclick = () => {
+  if (mode !== 'camera') {
+    status('Start the camera before beginning a Boxing Beat round.');
+    return;
+  }
+  boxingBaseline = null;
+  boxingCueRenderKey = '';
+  boxingRecordedCue = null;
+  playerHitAt = -Infinity;
+  playerHitSide = 0;
+  boxingImpactAt = -Infinity;
+  boxingImpact.visible = false;
+  boxingPunchDetector.reset();
+  boxingRound.start(performance.now());
+  renderBoxingRound(boxingRound.snapshot(performance.now()));
+};
+
 function returnToCarousel() {
+  setPlayerHeadTransparent(false);
+  boxingRound.reset();
+  boxingPunchDetector.reset();
+  boxingBaseline = null;
+  boxingCueRenderKey = '';
+  boxingRecordedCue = null;
+  playerHitAt = -Infinity;
+  playerHitSide = 0;
+  boxingImpactAt = -Infinity;
+  boxingImpact.visible = false;
+  $('view-game').dataset.game = '';
+  playerStage.position.set(0, 0, 0);
+  playerStage.rotation.set(0, 0, 0);
+  playerStage.scale.setScalar(1);
+  playerStage.updateMatrixWorld(true);
+  boxingOpponent.group.visible = false;
+  boxingOpponent.group.position.set(0, 0, 0);
+  boxingOpponent.baseZ = 1.15;
+  boxingOpponent.group.scale.setScalar(0.82);
+  renderBoxingRound(boxingRound.snapshot(performance.now()));
   soundEffects.playBack();
   showView('carousel');
   updateCardPositions();
@@ -669,7 +919,7 @@ function returnToCarousel() {
 
 function launchActiveGame() {
   soundEffects.playSelect();
-  $('active-game-title').textContent = activeGame.title;
+  configureActiveGame();
   showView('game');
   status(`Entered ${activeGame.title}. Move to begin exercise.`);
 }
@@ -1908,9 +2158,13 @@ function drawLandmarksAndVideo(points) {
   ctx.lineWidth = 2.5;
   for (const [a, b] of DETAILED_POSE_CONNECTIONS) {
     if ((points[a].visibility ?? 0) < 0.5 || (points[b].visibility ?? 0) < 0.5) continue;
+    const ax = (1 - points[a].x) * overlay.width;
+    const ay = points[a].y * overlay.height;
+    const bx = (1 - points[b].x) * overlay.width;
+    const by = points[b].y * overlay.height;
     ctx.beginPath();
-    ctx.moveTo(points[a].x * overlay.width, points[a].y * overlay.height);
-    ctx.lineTo(points[b].x * overlay.width, points[b].y * overlay.height);
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
     ctx.stroke();
   }
 
@@ -1945,6 +2199,19 @@ function animate(now) {
   const postureDlg = $('dialog-posture');
   const isWelcomePreviewActive = Boolean((handDlg?.open || postureDlg?.open) && $('welcome-bot-viewport'));
 
+  const isBoxingGame = currentView === 'game' && activeGame.gameType === 'boxing-beat';
+  boxingOpponent.group.visible = isBoxingGame;
+  if (isBoxingGame) {
+    const boxingState = boxingRound.snapshot(now);
+    const cue = boxingRound.active
+      ? boxingState.cues.find((item) => item.state === 'now')
+        || boxingState.cues.find((item) => item.state === 'upcoming' && item.inMs <= 900)
+      : null;
+    boxingOpponent.update(now, dt, cue?.opponentAction || 'idle', cue?.state === 'upcoming');
+  } else {
+    boxingOpponent.update(now, dt, 'idle');
+  }
+
   if (rig) {
     if (mode === 'demo') {
       rig.demo(now / 1000, dt);
@@ -1968,6 +2235,17 @@ function animate(now) {
             wasTracking = true;
 
             const lm = frame.landmarks;
+            if (currentView === 'game' && activeGame.gameType === 'boxing-beat' && boxingRound.active) {
+              if (!boxingBaseline) {
+                boxingBaseline = calibrateBoxingPose(lm);
+                if (boxingBaseline) boxingRound.feedback = 'Centered and calibrated — get ready!';
+              }
+              const punch = boxingPunchDetector.update(frame.worldLandmarks);
+              const move = punch || detectBoxingMove(lm, frame.worldLandmarks, boxingBaseline);
+              const boxingState = boxingRound.tick(now, move);
+              handleBoxingRoundEvents(boxingState, now);
+              renderBoxingRound(boxingState);
+            }
 
             // Hand cursors are only active and visible outside of active gameplay (Carousel & Details views)
             if (currentView === 'game') {
@@ -2029,6 +2307,37 @@ function animate(now) {
           cursorLeftEl.classList.add('hidden');
           cursorRightEl.classList.add('hidden');
         }
+        if (currentView === 'game' && activeGame.gameType === 'boxing-beat' && boxingRound.active) {
+          const boxingState = boxingRound.tick(now);
+          handleBoxingRoundEvents(boxingState, now);
+          renderBoxingRound(boxingState);
+        }
+      }
+
+      if (isBoxingGame && robotInstance && playerRestPosition) {
+        const hitElapsed = now - playerHitAt;
+        const hitStrength = hitElapsed >= 0 ? Math.exp(-hitElapsed / 260) : 0;
+        const recoil = Math.sin(Math.min(hitElapsed / 1000, 1) * Math.PI * 5) * hitStrength;
+        robotInstance.position.set(
+          playerRestPosition.x + playerHitSide * recoil * 0.12,
+          playerRestPosition.y + Math.abs(recoil) * 0.035,
+          playerRestPosition.z,
+        );
+        robotInstance.rotation.z = playerRestRotationZ + playerHitSide * recoil * 0.10;
+      } else if (robotInstance && playerRestPosition) {
+        robotInstance.position.copy(playerRestPosition);
+        robotInstance.rotation.z = playerRestRotationZ;
+      }
+
+      const impactElapsed = now - boxingImpactAt;
+      if (isBoxingGame && impactElapsed >= 0 && impactElapsed < 420) {
+        const progress = impactElapsed / 420;
+        boxingImpact.visible = true;
+        boxingImpact.scale.setScalar(0.45 + progress * 1.3);
+        boxingImpact.material.opacity = 0.95 * (1 - progress);
+      } else {
+        boxingImpact.visible = false;
+        boxingImpact.material.opacity = 0.95;
       }
     } else if (isWelcomePreviewActive) {
       rig.wave(now * 0.0018, dt);
