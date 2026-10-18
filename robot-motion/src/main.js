@@ -1455,7 +1455,7 @@ function configureActiveGame() {
     renderFlightUI();
   } else if (isStretching) {
     playerStage.position.set(0, 0, 0);
-    playerStage.rotation.set(0, 0, 0);
+    playerStage.rotation.set(0, Math.PI, 0);
     playerStage.scale.setScalar(1);
     playerStage.updateMatrixWorld(true);
     camera.fov = 36;
@@ -3051,7 +3051,11 @@ function animate(now) {
       if (mode === 'camera' && latest && now - lastSeen < 450) {
         // Automatically follow legs if legs are in frame
         const followLegs = Boolean(latest.worldLandmarks && ([25, 26, 27, 28].some(i => (latest.worldLandmarks[i]?.visibility ?? 1) > 0.45)));
-        rig.apply(latest.worldLandmarks, dt, followLegs);
+        if (currentView === 'game' && activeGame.gameType === 'flying') {
+          rig.reset(1 - Math.exp(-6 * dt));
+        } else {
+          rig.apply(latest.worldLandmarks, dt, followLegs);
+        }
       } else if (isWelcomePreviewActive) {
         // Friendly greeting wave from Blue while in the welcome setup dialog
         rig.wave(now * 0.0018, dt);

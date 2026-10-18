@@ -6,6 +6,7 @@ export class RobotRetargeter {
   constructor(root) {
     this.root = root;
     root.updateMatrixWorld(true);
+    this.rootBindQ = root.getWorldQuaternion(new Quaternion());
     this.bind = new Map();
     root.traverse(b => {
       if (!b.isBone) return;
@@ -18,7 +19,12 @@ export class RobotRetargeter {
   point(boneName, direction, alpha) {
     const bind = this.bind.get(boneName);
     if (!bind?.direction || direction.lengthSq() < .00001) return;
-    const desired = new Quaternion().setFromUnitVectors(bind.direction, direction.clone().normalize()).multiply(bind.world);
+    const currentRootQ = this.root.getWorldQuaternion(new Quaternion());
+    const deltaQ = currentRootQ.clone().multiply(this.rootBindQ.clone().invert());
+    const restDir = bind.direction.clone().applyQuaternion(deltaQ);
+    const restWorldQ = deltaQ.clone().multiply(bind.world);
+
+    const desired = new Quaternion().setFromUnitVectors(restDir, direction.clone().normalize()).multiply(restWorldQ);
     const parent = bind.bone.parent.getWorldQuaternion(new Quaternion());
     const local = parent.invert().multiply(desired);
     bind.bone.quaternion.slerp(local, alpha);
