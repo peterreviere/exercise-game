@@ -429,11 +429,15 @@ test('11. carousel cards fit full page, settings high contrast mode fixes black-
   assert.ok(css.includes('body[data-theme="high"] .setting-title'), 'CSS must specify white text for high contrast setting titles');
   assert.ok(css.includes('body[data-theme="high"] .help-list'), 'CSS must specify readable high contrast help list');
 
-  // 3. Text size scaling works on both documentElement and body
+  // 3. Text size scaling works on both documentElement and body (Default 130%, Large 150%, Extra Large 175%)
   assert.ok(mainJs.includes("document.documentElement.setAttribute('data-text-size', val);"), 'main.js must set data-text-size on documentElement');
-  assert.ok(mainJs.includes("document.documentElement.setAttribute('data-text-size', savedTextSize);"), 'loadSavedPreferences must set data-text-size on documentElement');
-  assert.ok(css.includes(':root[data-text-size="115"]'), 'CSS must scale font on :root for 115%');
+  assert.ok(mainJs.includes("document.documentElement.setAttribute('data-text-size', validTextSize);"), 'loadSavedPreferences must set data-text-size on documentElement');
   assert.ok(css.includes(':root[data-text-size="130"]'), 'CSS must scale font on :root for 130%');
+  assert.ok(css.includes(':root[data-text-size="150"]'), 'CSS must scale font on :root for 150%');
+  assert.ok(css.includes(':root[data-text-size="175"]'), 'CSS must scale font on :root for 175%');
+  assert.ok(html.includes('value="130" checked> Default'), 'Default must be 130 and checked');
+  assert.ok(html.includes('value="150"> Large (150%)'), 'Large must be 150');
+  assert.ok(html.includes('value="175"> Extra Large (175%)'), 'Extra large must be 175');
   assert.ok(css.includes('font-size: calc(16px * var(--font-scale, 1));'), 'html must scale font-size using --font-scale');
 });
 

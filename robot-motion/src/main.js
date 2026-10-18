@@ -1745,7 +1745,7 @@ function saveAllPreferences() {
   savePreference('adaptmove_motion', motion);
   const colorBlind = document.body.getAttribute('data-colorblind') || 'none';
   savePreference('adaptmove_colorblind', colorBlind);
-  const textSize = document.body.getAttribute('data-text-size') || '100';
+  const textSize = document.body.getAttribute('data-text-size') || '130';
   savePreference('adaptmove_text_size', textSize);
   const soundCb = $('setting-audio-feedback');
   savePreference('adaptmove_sound', soundCb?.checked ? 'true' : 'false');
@@ -1840,12 +1840,11 @@ function loadSavedPreferences() {
   }
 
   const savedTextSize = getStoredPreference('adaptmove_text_size');
-  if (savedTextSize) {
-    document.documentElement.setAttribute('data-text-size', savedTextSize);
-    document.body.setAttribute('data-text-size', savedTextSize);
-    const r = document.querySelector(`input[name="setting-text-size"][value="${savedTextSize}"]`);
-    if (r) r.checked = true;
-  }
+  const validTextSize = (savedTextSize === '150' || savedTextSize === '175') ? savedTextSize : '130';
+  document.documentElement.setAttribute('data-text-size', validTextSize);
+  document.body.setAttribute('data-text-size', validTextSize);
+  const r = document.querySelector(`input[name="setting-text-size"][value="${validTextSize}"]`);
+  if (r) r.checked = true;
 
   const savedSound = getStoredPreference('adaptmove_sound');
   if (savedSound !== null) {
