@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>umove · Accessible Exercise Games</title>
+  <meta name="description"
+    content="Accessibility-focused motion exercise games with sitting and standing modes, dual hand cursors, real-time pose tracking, and hands-free gesture navigation.">
+</head>
+
+<body data-theme="standard" data-color="blue" data-posture="standing" data-motion="standard" data-view="carousel">
+  <div id="app">
+    <!-- Top Global Header -->
+    <header class="app-header" role="banner">
+      <button type="button" class="brand motion-target" id="btn-home" title="umove - Return to Home Menu"
+        aria-label="umove Home">
+        <span class="brand-badge" aria-hidden="true"></span>
+        <div class="brand-text">
+          <span class="brand-title">umove</span>
+        </div>
+      </button>
+
+      <div class="header-controls">
+        <!-- Quick Theme Color Picker -->
+        <div class="header-theme-picker" id="header-theme-picker" role="radiogroup" aria-label="Quick Theme Color">
+          <button type="button" class="quick-color-btn active motion-target" data-color="blue" aria-label="Blue theme"
+            title="Blue"></button>
+          <button type="button" class="quick-color-btn motion-target" data-color="purple" aria-label="Purple theme"
+            title="Purple"></button>
+          <button type="button" class="quick-color-btn motion-target" data-color="emerald" aria-label="Emerald theme"
+            title="Emerald"></button>
+          <button type="button" class="quick-color-btn motion-target" data-color="coral" aria-label="Coral theme"
+            title="Coral"></button>
+          <button type="button" class="quick-color-btn motion-target" data-color="rose" aria-label="Rose theme"
+            title="Rose"></button>
+        </div>
+        <!-- Quick Camera Motion Navigation Toggle -->
+        <button type="button" id="btn-camera-toggle" class="header-btn motion-target" aria-pressed="false"
+          title="Toggle camera for motion gesture navigation">
+          <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+            <rect x="2" y="6" width="14" height="12" rx="2" />
+          </svg>
+          <span id="camera-btn-text">Start Camera</span>
+        </button>
+
+        <!-- Settings & Accessibility Menu Toggle (Simple Gear Icon) -->
+        <button type="button" id="btn-settings" class="header-btn motion-target" aria-haspopup="dialog"
+          aria-expanded="false" title="Open Settings & Accessibility">
+          <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          <span>Settings</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- =====================================================================
+         MAIN VIEW 1: GAME CAROUSEL VIEW (Main Menu)
+         ===================================================================== -->
+    <main id="view-carousel" class="view-active" aria-label="Exercise Games Carousel">
+      <div class="carousel-container">
+        <!-- Live status announcement for screen readers -->
+        <div id="carousel-announcement" class="sr-only" role="status" aria-live="polite"></div>
+
+        <div class="carousel-header">
+          <h1 class="carousel-heading">Welcome to umove</h1>
+          <p class="carousel-subheading" id="carousel-subheading">Choose your activity</p>
+        </div>
+
+        <!-- 3D Carousel Stage (Center card, 1 left, 1 right) -->
+        <div class="carousel-stage-wrapper">
+          <button type="button" id="carousel-prev" class="carousel-nav-btn prev motion-target"
+            aria-label="Previous game card (Left arrow / Left hand swipe left)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+
+          <div class="carousel-viewport" id="carousel-viewport" role="region" aria-roledescription="carousel"
+            aria-label="Games list">
+            <div class="carousel-track" id="carousel-track">
+              <!-- Rendered dynamically from gamesConfig.js -->
+            </div>
+          </div>
+
+          <button type="button" id="carousel-next" class="carousel-nav-btn next motion-target"
+            aria-label="Next game card (Right arrow / Right hand swipe right)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Carousel Indicators (Pill Dots) -->
+        <div class="carousel-indicators" id="carousel-indicators" role="tablist" aria-label="Game card selection">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </main>
+
+    <!-- =====================================================================
+         MAIN VIEW 2: GAME DETAILS PAGE (Dedicated Description & Launch Page)
+         ===================================================================== -->
+    <main id="view-details" class="view-hidden" aria-label="Activity Description and Setup">
+      <div class="details-container">
+        <div class="details-top-bar">
+          <button type="button" id="btn-details-back" class="btn-back motion-target"
+            title="Return to activity carousel">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+            <span>Back to Games</span>
+          </button>
+        </div>
+
+        <section class="details-content-grid">
+          <!-- Left Column: Details, Description, Attributes & Action -->
+          <div class="details-text-col">
+            <div class="details-badges" id="details-badges">
+              <span class="badge primary" id="details-status-badge">Ready to Play</span>
+            </div>
+
+            <h1 class="details-title" id="details-title">Robot Mirror Buddy</h1>
+            <p class="details-subtitle" id="details-subtitle">Gentle Mirror Motion & Posture Practice</p>
+
+            <div class="details-description-box">
+              <h2 class="section-subheading">About This Activity</h2>
+              <p class="details-description" id="details-description">
+                Follow and mirror Moshi, your friendly animated robot. Practice standing upper-body reach, side bends,
+                and arm lifts with real-time pose tracking.
+              </p>
+            </div>
+
+            <div class="detail-meta-grid">
+              <div class="meta-item">
+                <span class="meta-label">Focus Area</span>
+                <span class="meta-value" id="details-focus-val">Upper Body & Posture</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Intensity</span>
+                <span class="meta-value" id="details-intensity-val">Gentle (Low Strain)</span>
+              </div>
+            </div>
+
+            <div class="details-action-area">
+              <button type="button" id="btn-start-game" class="btn-primary-action motion-target"
+                aria-label="Start Activity">
+                <span class="action-btn-text">Start Activity</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </button>
+              <div class="details-dwell-hint" id="details-dwell-hint">
+                Move right hand cursor over <strong>Start Activity</strong> and <strong>hover for 1.4s</strong> to
+                select, or cross <strong>hands in an 'X'</strong> to go back
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Visual Preview -->
+          <div class="details-media-col">
+            <div class="details-card-preview">
+              <img id="details-image" src="" alt="Activity visual preview">
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- =====================================================================
+         MAIN VIEW 3: GAME VIEW (Features the Existing Robot Motion Interface)
+         ===================================================================== -->
+    <main id="view-game" class="view-hidden" aria-label="Active Game: Robot Mirror Buddy">
+      <div class="game-view-header">
+        <button type="button" id="btn-back-to-carousel" class="btn-back motion-target"
+          title="Return to activity carousel">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          <span>Back to Menu</span>
+        </button>
+        <div class="game-view-title-group">
+          <h2 id="active-game-title">Robot Mirror Buddy</h2>
+          <span class="game-active-badge">Active Activity</span>
+        </div>
+      </div>
+
+      <div class="game-layout">
+        <!-- The Existing 3D Stage -->
+        <section class="stage">
+          <div class="stage-label" id="game-stage-label">MEET YOUR MOVEMENT BUDDY</div>
+          <h1 id="game-stage-title">A little robot.<br>Your every move.</h1>
+          <div id="viewport" aria-label="3D robot preview"></div>
+          <div class="stage-footer">
+            <span id="pose">Ready when you are</span>
+            <span id="mode-badge-text">LIVE 3D · MIRROR MOTION</span>
+          </div>
+        </section>
+
+        <!-- The Existing Control Aside -->
+        <aside class="game-aside">
+          <div class="eyebrow">01 / CONNECT</div>
+          <h2>Move together.</h2>
+          <p id="aside-instructions">Raise an arm, reach wide, or lean. Moshi follows your movement through your camera.
+          </p>
+
+          <div class="camera">
+            <canvas id="game-camera-canvas"></canvas>
+            <canvas id="overlay"></canvas>
+            <div id="camera-placeholder">Your camera preview<br><small>Video stays on this device</small></div>
+          </div>
+
+          <div id="status" role="status" aria-live="polite">Loading Moshi</div>
+
+          <div class="button-group">
+            <button id="start" class="motion-target" disabled>Start camera</button>
+            <div class="row">
+              <button id="demo" class="secondary motion-target" disabled>Try demo</button>
+              <button id="stop" class="secondary motion-target" disabled>Stop</button>
+            </div>
+          </div>
+
+          <label id="legs-label"><input id="legs" type="checkbox"> Follow legs too <small id="legs-helper">Full body
+              must be visible</small></label>
+
+          <div class="note">
+            <b>Ergonomic movement tips</b>
+            <p id="ergonomic-tip">In standing mode, stand centered with your full body in frame for optimal motion
+              tracking.</p>
+          </div>
+
+          <div class="motion-return-tip">
+            <p>Tip: Cross your hands in an 'X' shape or press <kbd>Esc</kbd> to return to menu.</p>
+          </div>
+
+          <details>
+            <summary>Camera help</summary>
+            <p>Allow camera access in your browser. Close other apps using the webcam. Run on localhost in Chrome or
+              Edge.</p>
+          </details>
+        </aside>
+      </div>
+    </main>
+
+    <!-- =====================================================================
+         Persistent Video Element & Camera HUD
+         ===================================================================== -->
+    <!-- Hidden persistent video feed so camera never disconnects between views -->
+    <video id="video" class="persistent-video-feed" autoplay playsinline muted></video>
+
+    <!-- Mini Camera HUD for Carousel & Details View -->
+    <div id="mini-camera-hud" class="mini-camera-hud hidden" aria-label="Motion tracking status overlay">
+      <div class="mini-camera-header">
+        <span class="mini-camera-status">● Live Camera</span>
+        <button type="button" id="btn-toggle-mini-cam" class="mini-cam-btn motion-target"
+          title="Toggle camera preview size" aria-label="Minimize or maximize camera preview">—</button>
+      </div>
+      <div class="mini-camera-body" id="mini-camera-body">
+        <canvas id="mini-overlay" width="180" height="135"></canvas>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         Dual Hand Cursors (Left & Right) with Close-Hand Grip Feedback
+         ===================================================================== -->
+    <div id="hand-cursor-left" class="hand-cursor left hidden" aria-hidden="true">
+      <svg class="hand-cursor-progress-svg" viewBox="0 0 52 52" aria-hidden="true">
+        <circle class="hand-cursor-track" cx="26" cy="26" r="22"></circle>
+        <circle class="hand-cursor-fill" id="hand-dwell-left" cx="26" cy="26" r="22"></circle>
+      </svg>
+      <div class="hand-cursor-ring-outer"></div>
+      <div class="hand-cursor-dot"></div>
+      <div class="hand-cursor-status-pill">
+        <span class="hand-cursor-label">L</span>
+        <span class="hand-state-text" id="hand-state-left"></span>
+      </div>
+    </div>
+
+    <div id="hand-cursor-right" class="hand-cursor right hidden" aria-hidden="true">
+      <svg class="hand-cursor-progress-svg" viewBox="0 0 52 52" aria-hidden="true">
+        <circle class="hand-cursor-track" cx="26" cy="26" r="22"></circle>
+        <circle class="hand-cursor-fill" id="hand-dwell-right" cx="26" cy="26" r="22"></circle>
+      </svg>
+      <div class="hand-cursor-ring-outer"></div>
+      <div class="hand-cursor-dot"></div>
+      <div class="hand-cursor-status-pill">
+        <span class="hand-cursor-label">R</span>
+        <span class="hand-state-text" id="hand-state-right"></span>
+      </div>
+    </div>
+
+    <!-- Cross Hands in X Hold Indicator Banner -->
+    <div id="chest-pose-banner" class="chest-pose-banner hidden" role="status" aria-live="assertive">
+      <div class="chest-banner-content">
+        <svg class="chest-banner-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <div class="chest-banner-text">
+          <strong>Cross Hands (X)</strong>
+          <span id="chest-banner-subtitle">Hold to Return to Menu…</span>
+        </div>
+        <div class="chest-banner-bar">
+          <div id="chest-banner-progress" class="chest-banner-progress"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         POPUP 1: Hand Mode (Selecting Hand + Meet Blue Robot)
+         ===================================================================== -->
+    <dialog id="dialog-hand" class="motion-dialog welcome-modal-dialog" aria-labelledby="dialog-hand-title">
+      <div class="dialog-content motion-popup-content welcome-modal-content">
+        <button type="button" class="btn-close-dialog motion-target" id="btn-close-hand"
+          aria-label="Close hand dialog">✕</button>
+
+        <div class="welcome-modal-split">
+          <!-- LEFT PANEL: Meet Blue Robot & Camera Introduction -->
+          <div class="welcome-robot-panel">
+            <div class="welcome-robot-badge">
+              <span class="welcome-robot-dot"></span>
+              <span>Meet Moshi</span>
+            </div>
+
+            <!-- 3D Viewport for Blue -->
+            <div class="welcome-bot-stage">
+              <div id="welcome-bot-viewport" class="welcome-bot-viewport" aria-label="3D robot Moshi preview"></div>
+            </div>
+
+            <!-- Speech Card -->
+            <div class="welcome-bot-speech">
+              <h3 class="speech-title">Hi my name is Moshi!</h3>
+              <p class="speech-text">Wave to me and I will wave back!</p>
+
+              <!-- Camera Permission Guidance -->
+              <div class="welcome-cam-status-pill" id="welcome-cam-status-pill">
+                <span class="cam-status-dot" id="welcome-cam-dot"></span>
+                <span id="welcome-cam-msg">Please accept camera permissions if prompted to wave together!</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT PANEL: Settings & Hand Selection -->
+          <div class="welcome-settings-panel">
+            <div class="dialog-header motion-popup-header">
+              <div class="dialog-step-badge">Step 1 of 2 · Selecting Hand</div>
+              <div class="dialog-title-row">
+                <h2 id="dialog-hand-title">Choose Selecting Hand</h2>
+              </div>
+              <p class="dialog-header-desc">Select which hand controls the interactive pointer cursor to select buttons
+                and cards.</p>
+
+              <!-- Notice: continue setup with mouse or motion controls -->
+              <div class="welcome-input-notice">
+                <svg class="notice-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="10" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <div class="notice-text">
+                  You can continue setup with a mouse or motion controls.
+                </div>
+              </div>
+            </div>
+
+            <div class="dialog-body motion-popup-body">
+              <div class="motion-cards-grid three-col">
+                <button type="button" class="motion-select-card active motion-target" data-hand-value="both"
+                  id="opt-hand-both">
+                  <div class="card-icon-circle">
+                    <svg class="icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M7 11V7a2 2 0 0 1 4 0v4" />
+                      <path d="M17 11V7a2 2 0 0 0-4 0v4" />
+                      <path d="M3 15a6 6 0 0 0 6 6h6a6 6 0 0 0 6-6v-3a2 2 0 0 0-4 0" />
+                    </svg>
+                  </div>
+                  <div class="card-text-block">
+                    <strong class="card-main-title">Both Hands</strong>
+                    <span class="card-main-desc">Show pointers on both hands simultaneously (Default).</span>
+                  </div>
+                  <div class="card-check-indicator" aria-hidden="true"></div>
+                </button>
+
+                <button type="button" class="motion-select-card motion-target" data-hand-value="right"
+                  id="opt-hand-right">
+                  <div class="card-icon-circle">
+                    <svg class="icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v7" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                    </svg>
+                  </div>
+                  <div class="card-text-block">
+                    <strong class="card-main-title">Right Hand</strong>
+                    <span class="card-main-desc">Use right hand cursor for aiming and selecting.</span>
+                  </div>
+                  <div class="card-check-indicator" aria-hidden="true"></div>
+                </button>
+
+                <button type="button" class="motion-select-card motion-target" data-hand-value="left"
+                  id="opt-hand-left">
+                  <div class="card-icon-circle">
+                    <svg class="icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                      style="transform: scaleX(-1);">
+                      <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v7" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                    </svg>
+                  </div>
+                  <div class="card-text-block">
+                    <strong class="card-main-title">Left Hand</strong>
+                    <span class="card-main-desc">Use left hand cursor for aiming and selecting.</span>
+                  </div>
+                  <div class="card-check-indicator" aria-hidden="true"></div>
+                </button>
+              </div>
+
+              <!-- Theme & Robot Color Selection -->
+              <div class="welcome-color-group" id="group-welcome-color">
+                <span class="setting-title" id="welcome-color-label">Theme &amp; Robot Color</span>
+                <p class="setting-desc">Personalize your favorite accent color for umove and your robot companion.</p>
+                <div class="color-swatches" role="radiogroup" aria-labelledby="welcome-color-label">
+                  <button type="button" class="color-swatch-btn active motion-target" data-color="blue"
+                    aria-label="Blue color theme" title="Blue">
+                    <span class="swatch-circle" style="background: #0284c7;"></span>
+                    <span class="swatch-name">Blue</span>
+                  </button>
+                  <button type="button" class="color-swatch-btn motion-target" data-color="purple"
+                    aria-label="Purple color theme" title="Purple">
+                    <span class="swatch-circle" style="background: #8b5cf6;"></span>
+                    <span class="swatch-name">Purple</span>
+                  </button>
+                  <button type="button" class="color-swatch-btn motion-target" data-color="emerald"
+                    aria-label="Emerald color theme" title="Emerald">
+                    <span class="swatch-circle" style="background: #10b981;"></span>
+                    <span class="swatch-name">Emerald</span>
+                  </button>
+                  <button type="button" class="color-swatch-btn motion-target" data-color="coral"
+                    aria-label="Coral color theme" title="Coral">
+                    <span class="swatch-circle" style="background: #ea580c;"></span>
+                    <span class="swatch-name">Coral</span>
+                  </button>
+                  <button type="button" class="color-swatch-btn motion-target" data-color="rose"
+                    aria-label="Rose color theme" title="Rose">
+                    <span class="swatch-circle" style="background: #e11d48;"></span>
+                    <span class="swatch-name">Rose</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="dialog-footer motion-popup-footer">
+              <button type="button" class="btn-subtle-accessibility motion-target" id="btn-hand-to-accessibility">
+                <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                <span>Accessibility Settings</span>
+              </button>
+
+              <div class="footer-nav-buttons">
+                <button type="button" class="btn-primary-action motion-target" id="btn-hand-next">
+                  <span>Next: Dwell Timer</span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- =====================================================================
+         POPUP 2: Dwell Timer Duration Selection (Motion Optimized)
+         ===================================================================== -->
+    <dialog id="dialog-select-mode" class="motion-dialog" aria-labelledby="dialog-select-mode-title">
+      <div class="dialog-content motion-popup-content">
+        <div class="dialog-header motion-popup-header">
+          <div class="dialog-step-badge">Step 2 of 2 · Dwell Timer Duration</div>
+          <div class="dialog-title-row">
+            <h2 id="dialog-select-mode-title">Choose Dwell Timer Speed</h2>
+          </div>
+          <p class="dialog-header-desc">Hold your cursor steadily over any card or button to select it automatically.
+            Choose how long to hover:</p>
+          <button type="button" class="btn-close-dialog motion-target" id="btn-close-select-mode"
+            aria-label="Close dwell timer dialog">✕</button>
+        </div>
+
+        <div class="dialog-body motion-popup-body">
+          <div class="motion-cards-grid four-col">
+            <button type="button" class="motion-select-card motion-target dwell-card" data-dwell-val="1000"
+              id="opt-dwell-1000">
+              <div class="card-icon-circle">
+                <svg class="icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 15 10" />
+                </svg>
+              </div>
+              <div class="card-text-block">
+                <strong class="card-main-title">1.0s · Fast</strong>
+                <span class="card-main-desc">Quick selection for responsive, agile movements.</span>
+              </div>
+              <div class="card-check-indicator" aria-hidden="true"></div>
+            </button>
+
+            <button type="button" class="motion-select-card active motion-target dwell-card" data-dwell-val="1400"
+              id="opt-dwell-1400">
+              <div class="card-icon-circle">
+                <svg class="icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </div>
+              <div class="card-text-block">
+                <strong class="card-main-title">1.4s · Standard</strong>
+                <span class="card-main-desc">Recommended balance of ease, comfort, and control.</span>
+              </div>
+              <div class="card-check-indicator" aria-hidden="true"></div>
+            </button>
+
+            <button type="button" class="motion-select-card motion-target dwell-card" data-dwell-val="1800"
+              id="opt-dwell-1800">
+              <div class="card-icon-circle">
+                <svg class="icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 16" />
+                </svg>
+              </div>
+              <div class="card-text-block">
+                <strong class="card-main-title">1.8s · Comfortable</strong>
+                <span class="card-main-desc">Relaxed timing that helps prevent accidental clicks.</span>
+              </div>
+              <div class="card-check-indicator" aria-hidden="true"></div>
+            </button>
+
+            <button type="button" class="motion-select-card motion-target dwell-card" data-dwell-val="2300"
+              id="opt-dwell-2300">
+              <div class="card-icon-circle">
+                <svg class="icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 18 16" />
+                </svg>
+              </div>
+              <div class="card-text-block">
+                <strong class="card-main-title">2.3s · Relaxed</strong>
+                <span class="card-main-desc">Extra hold time for calm, steady exploration.</span>
+              </div>
+              <div class="card-check-indicator" aria-hidden="true"></div>
+            </button>
+          </div>
+        </div>
+
+        <div class="dialog-footer motion-popup-footer">
+          <button type="button" class="btn-subtle-accessibility motion-target" id="btn-select-mode-to-accessibility">
+            <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span>Accessibility Settings</span>
+          </button>
+
+          <div class="footer-nav-buttons">
+            <button type="button" class="btn-subtle-action motion-target" id="btn-select-mode-back">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+              <span>Back</span>
+            </button>
+            <button type="button" class="btn-primary-action motion-target" id="btn-select-mode-save">
+              <span>Save Preferences & Continue</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- =====================================================================
+         Comprehensive Accessibility Settings Dialog (Clean, No Emojis)
+         ===================================================================== -->
+    <dialog id="accessibility-dialog" class="accessibility-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-content">
+        <div class="dialog-header">
+          <div class="dialog-title-group">
+            <div class="dialog-title-row">
+              <svg class="dialog-title-icon" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              <h2 id="dialog-title">Settings & Accessibility</h2>
+            </div>
+            <p class="dialog-header-desc">Customize dwell timer duration and accessibility preferences. Preferences are
+              saved automatically.</p>
+          </div>
+          <button type="button" id="btn-close-dialog" class="btn-close-dialog motion-target"
+            aria-label="Close settings">✕</button>
+        </div>
+
+        <div class="dialog-body">
+          <!-- Accessibility & Comfort Section -->
+          <div class="settings-accessibility-section" id="section-accessibility">
+            <div class="section-divider-header">
+              <span class="section-title-badge">Accessibility Preferences</span>
+              <h3 class="settings-section-heading">Selecting Hand & Dwell Timer</h3>
+              <p class="settings-section-desc">Fine-tune selecting hand, dwell selection timing, visual contrast, motion
+                intensity, text scale, and audio cues.</p>
+            </div>
+
+            <!-- Selecting Hand Settings -->
+            <div class="setting-group" id="group-hand-settings">
+              <span class="setting-title" id="setting-hand-label">Selecting Hand</span>
+              <p class="setting-desc">Choose which hand controls the interactive pointer cursor, or enable both hands.
+              </p>
+              <div class="setting-options" role="radiogroup" aria-labelledby="setting-hand-label">
+                <label class="radio-pill motion-target">
+                  <input type="radio" name="setting-active-hand" value="both" checked> Both Hands (Default)
+                </label>
+                <label class="radio-pill motion-target">
+                  <input type="radio" name="setting-active-hand" value="right"> Right Hand
+                </label>
+                <label class="radio-pill motion-target">
+                  <input type="radio" name="setting-active-hand" value="left"> Left Hand
+                </label>
+              </div>
+            </div>
+
+            <!-- Dwell Timer Duration Settings -->
+            <div class="setting-group" id="group-dwell-settings">
+              <span class="setting-title" id="setting-dwell-label">Dwell Timer Duration</span>
+              <p class="setting-desc">Configure how long you need to hover over an item before it activates.</p>
+              <div class="setting-options" role="radiogroup" aria-labelledby="setting-dwell-label">
+                <label class="radio-pill motion-target">
+                  <input type="radio" name="setting-dwell-time" value="1000"> 1.0s (Fast)
+                </label>
+                <label class="radio-pill motion-target">
+                  <input type="radio" name="setting-dwell-time" value="1400" checked> 1.4s (Standard)
+                </label>
+                <label class="radio-pill motion-target">
+                  <input type="radio" name="setting-dwell-time" value="1800"> 1.8s (Comfortable)
+                </label>
+                <label class="radio-pill motion-target">
+                  <input type="radio" name="setting-dwell-time" value="2300"> 2.3s (Relaxed)
+                </label>
+              </div>
+            </div>
+
+            <!-- Theme & Robot Color Settings -->
+            <div class="setting-group" id="group-settings-color">
+              <span class="setting-title" id="setting-color-label">Theme &amp; Robot Color</span>
+              <p class="setting-desc">Personalize the website accent color and your 3D robot companion.</p>
+              <div class="color-swatches" role="radiogroup" aria-labelledby="setting-color-label">
+                <button type="button" class="color-swatch-btn active motion-target" data-color="blue"
+                  aria-label="Blue color theme" title="Blue">
+                  <span class="swatch-circle" style="background: #0284c7;"></span>
+                  <span class="swatch-name">Blue</span>
+                </button>
+                <button type="button" class="color-swatch-btn motion-target" data-color="purple"
+                  aria-label="Purple color theme" title="Purple">
+                  <span class="swatch-circle" style="background: #8b5cf6;"></span>
+                  <span class="swatch-name">Purple</span>
+                </button>
+                <button type="button" class="color-swatch-btn motion-target" data-color="emerald"
+                  aria-label="Emerald color theme" title="Emerald">
+                  <span class="swatch-circle" style="background: #10b981;"></span>
+                  <span class="swatch-name">Emerald</span>
+                </button>
+                <button type="button" class="color-swatch-btn motion-target" data-color="coral"
+                  aria-label="Coral color theme" title="Coral">
+                  <span class="swatch-circle" style="background: #ea580c;"></span>
+                  <span class="swatch-name">Coral</span>
+                </button>
+                <button type="button" class="color-swatch-btn motion-target" data-color="rose"
+                  aria-label="Rose color theme" title="Rose">
+                  <span class="swatch-circle" style="background: #e11d48;"></span>
+                  <span class="swatch-name">Rose</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Color Contrast -->
+          <div class="setting-group">
+            <span class="setting-title" id="setting-contrast-label">Visual Contrast</span>
+            <p class="setting-desc">Enhances readability and visible element boundaries.</p>
+            <div class="setting-options" role="radiogroup" aria-labelledby="setting-contrast-label">
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-contrast" value="standard" checked> Standard Clean
+              </label>
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-contrast" value="high"> High Contrast (AAA)
+              </label>
+            </div>
+          </div>
+
+          <!-- Color Vision / Color Blindness -->
+          <div class="setting-group" id="group-settings-colorblind">
+            <span class="setting-title" id="setting-colorblind-label">Color Vision Filter</span>
+            <p class="setting-desc">Adjust screen colors to support different types of color vision.</p>
+            <div class="setting-options" role="radiogroup" aria-labelledby="setting-colorblind-label">
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-colorblind" value="none" checked> None (Default)
+              </label>
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-colorblind" value="protanopia"> Protanopia (Red-Blind)
+              </label>
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-colorblind" value="deuteranopia"> Deuteranopia (Green-Blind)
+              </label>
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-colorblind" value="tritanopia"> Tritanopia (Blue-Blind)
+              </label>
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-colorblind" value="achromatopsia"> Achromatopsia (Monochrome)
+              </label>
+            </div>
+          </div>
+
+          <!-- Motion & Animations -->
+          <div class="setting-group">
+            <span class="setting-title" id="setting-motion-label">Visual Motion</span>
+            <p class="setting-desc">Reduces screen motion and disables 3D tilts for vestibular comfort.</p>
+            <div class="setting-options" role="radiogroup" aria-labelledby="setting-motion-label">
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-reduced-motion" value="standard" checked> Smooth Motion
+              </label>
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-reduced-motion" value="reduced"> Reduced Motion
+              </label>
+            </div>
+          </div>
+
+          <!-- Text Size -->
+          <div class="setting-group">
+            <span class="setting-title" id="setting-text-label">Text Size Scaling</span>
+            <div class="setting-options" role="radiogroup" aria-labelledby="setting-text-label">
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-text-size" value="100" checked> Default (100%)
+              </label>
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-text-size" value="115"> Large (115%)
+              </label>
+              <label class="radio-pill motion-target">
+                <input type="radio" name="setting-text-size" value="130"> Extra Large (130%)
+              </label>
+            </div>
+          </div>
+
+          <!-- Audio Feedback -->
+          <div class="setting-group">
+            <span class="setting-title">Sound Cues</span>
+            <label class="toggle-label motion-target">
+              <input type="checkbox" id="setting-audio-feedback" checked>
+              <span>Play subtle audio clicks and chimes when selecting</span>
+            </label>
+          </div>
+
+          <!-- Keyboard & Motion Reference Guide -->
+          <div class="setting-group help-section">
+            <h3 class="help-title">Navigation Controls Guide</h3>
+            <ul class="help-list">
+              <li><strong>Aim & Select:</strong> Move your hand cursor over any button or card. Hold steady for the
+                dwell timer to select automatically.</li>
+              <li><strong>Cross Hands in 'X':</strong> Cross your hands or forearms in an 'X' shape in front of you to
+                return to previous menu or dismiss a dialog.</li>
+              <li><strong>Browse Cards:</strong> Swipe left hand to the left for previous card, or right hand to the
+                right for next card. In single-hand mode, swipe that hand left or right. Or use <kbd>&larr;</kbd> /
+                <kbd>&rarr;</kbd> arrow keys.
+              </li>
+              <li><strong>Keyboard Select:</strong> Press <kbd>Enter</kbd> or <kbd>Space</kbd> on any card or button.
+              </li>
+              <li><strong>Keyboard Back:</strong> Press <kbd>Esc</kbd> anytime to go back.</li>
+              <li><strong>Posture:</strong> Standing mode is active with full-body motion tracking.</li>
+              <li><strong>Toggle Selecting Hand:</strong> Press <kbd>H</kbd> to cycle selecting hand between Both Hands,
+                Right, and Left.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dialog-footer">
+          <button type="button" id="btn-save-dialog" class="btn-primary-action motion-target">Save Preferences &
+            Continue</button>
+        </div>
+      </div>
+    </dialog>
+  </div>
+  <!-- Color Blindness SVG Simulation Filters -->
+  <svg class="sr-only" aria-hidden="true" style="position: absolute; width: 0; height: 0; overflow: hidden;">
+    <defs>
+      <!-- Protanopia (Red-blind / Red-weak) -->
+      <filter id="filter-protanopia">
+        <feColorMatrix type="matrix" values="
+          0.567 0.433 0.000 0 0
+          0.558 0.442 0.000 0 0
+          0.000 0.242 0.758 0 0
+          0.000 0.000 0.000 1 0" />
+      </filter>
+      <!-- Deuteranopia (Green-blind / Green-weak) -->
+      <filter id="filter-deuteranopia">
+        <feColorMatrix type="matrix" values="
+          0.625 0.375 0.000 0 0
+          0.700 0.300 0.000 0 0
+          0.000 0.300 0.700 0 0
+          0.000 0.000 0.000 1 0" />
+      </filter>
+      <!-- Tritanopia (Blue-blind / Blue-weak) -->
+      <filter id="filter-tritanopia">
+        <feColorMatrix type="matrix" values="
+          0.950 0.050 0.000 0 0
+          0.000 0.433 0.567 0 0
+          0.000 0.475 0.525 0 0
+          0.000 0.000 0.000 1 0" />
+      </filter>
+      <!-- Achromatopsia (Monochrome / Complete Color Blindness) -->
+      <filter id="filter-achromatopsia">
+        <feColorMatrix type="matrix" values="
+          0.299 0.587 0.114 0 0
+          0.299 0.587 0.114 0 0
+          0.299 0.587 0.114 0 0
+          0.000 0.000 0.000 1 0" />
+      </filter>
+    </defs>
+  </svg>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
