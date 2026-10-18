@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-text-size="130">
 
 <head>
   <meta charset="utf-8">
@@ -9,7 +9,8 @@
     content="Accessibility-focused motion exercise games with sitting and standing modes, dual hand cursors, real-time pose tracking, and hands-free gesture navigation.">
 </head>
 
-<body data-theme="standard" data-color="blue" data-posture="standing" data-motion="standard" data-view="carousel">
+<body data-theme="standard" data-color="blue" data-posture="standing" data-motion="standard" data-view="carousel"
+  data-text-size="130">
   <div id="app">
     <!-- Top Global Header -->
     <header class="app-header" role="banner">
@@ -196,15 +197,9 @@
       </div>
 
       <div class="game-layout">
-        <!-- The Existing 3D Stage -->
+        <!-- 3D Robot Stage -->
         <section class="stage">
-          <div class="stage-label" id="game-stage-label">MEET YOUR MOVEMENT BUDDY</div>
-          <h1 id="game-stage-title">A little robot.<br>Your every move.</h1>
           <div id="viewport" aria-label="3D robot preview"></div>
-          <div class="stage-footer">
-            <span id="pose">Ready when you are</span>
-            <span id="mode-badge-text">LIVE 3D · MIRROR MOTION</span>
-          </div>
           <section id="boxing-forecast" class="boxing-forecast" aria-label="Upcoming boxing moves" hidden>
             <div class="boxing-forecast-heading">
               <span id="boxing-round-clock">45 SEC ROUND</span>
@@ -214,17 +209,14 @@
           </section>
         </section>
 
-        <!-- The Existing Control Aside -->
+        <!-- Control Aside -->
         <aside class="game-aside">
-          <div class="eyebrow">01 / CONNECT</div>
-          <h2>Move together.</h2>
-          <p id="aside-instructions">Raise an arm, reach wide, or lean. Moshi follows your movement through your camera.
-          </p>
+          <h2 class="aside-mirror-title">Watch Moshi Mirror Your Every Move!</h2>
 
           <div class="camera">
             <canvas id="game-camera-canvas"></canvas>
             <canvas id="overlay"></canvas>
-            <div id="camera-placeholder">Your camera preview<br><small>Video stays on this device</small></div>
+            <div id="camera-placeholder"></div>
           </div>
 
           <div id="status" role="status" aria-live="polite">Loading Moshi</div>
@@ -249,24 +241,9 @@
             </div>
           </div>
 
-          <label id="legs-label"><input id="legs" type="checkbox"> Follow legs too <small id="legs-helper">Full body
-              must be visible</small></label>
-
-          <div class="note">
-            <b>Ergonomic movement tips</b>
-            <p id="ergonomic-tip">In standing mode, stand centered with your full body in frame for optimal motion
-              tracking.</p>
-          </div>
-
           <div class="motion-return-tip">
             <p>Tip: Cross your hands in an 'X' shape or press <kbd>Esc</kbd> to return to menu.</p>
           </div>
-
-          <details>
-            <summary>Camera help</summary>
-            <p>Allow camera access in your browser. Close other apps using the webcam. Run on localhost in Chrome or
-              Edge.</p>
-          </details>
         </aside>
       </div>
     </main>
@@ -786,13 +763,13 @@
             <span class="setting-title" id="setting-text-label">Text Size Scaling</span>
             <div class="setting-options" role="radiogroup" aria-labelledby="setting-text-label">
               <label class="radio-pill motion-target">
-                <input type="radio" name="setting-text-size" value="100" checked> Default (100%)
+                <input type="radio" name="setting-text-size" value="130" checked> Default
               </label>
               <label class="radio-pill motion-target">
-                <input type="radio" name="setting-text-size" value="115"> Large (115%)
+                <input type="radio" name="setting-text-size" value="150"> Large (150%)
               </label>
               <label class="radio-pill motion-target">
-                <input type="radio" name="setting-text-size" value="130"> Extra Large (130%)
+                <input type="radio" name="setting-text-size" value="175"> Extra Large (175%)
               </label>
             </div>
           </div>

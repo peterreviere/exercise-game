@@ -429,11 +429,15 @@ test('11. carousel cards fit full page, settings high contrast mode fixes black-
   assert.ok(css.includes('body[data-theme="high"] .setting-title'), 'CSS must specify white text for high contrast setting titles');
   assert.ok(css.includes('body[data-theme="high"] .help-list'), 'CSS must specify readable high contrast help list');
 
-  // 3. Text size scaling works on both documentElement and body
+  // 3. Text size scaling works on both documentElement and body (Default 130%, Large 150%, Extra Large 175%)
   assert.ok(mainJs.includes("document.documentElement.setAttribute('data-text-size', val);"), 'main.js must set data-text-size on documentElement');
-  assert.ok(mainJs.includes("document.documentElement.setAttribute('data-text-size', savedTextSize);"), 'loadSavedPreferences must set data-text-size on documentElement');
-  assert.ok(css.includes(':root[data-text-size="115"]'), 'CSS must scale font on :root for 115%');
+  assert.ok(mainJs.includes("document.documentElement.setAttribute('data-text-size', validTextSize);"), 'loadSavedPreferences must set data-text-size on documentElement');
   assert.ok(css.includes(':root[data-text-size="130"]'), 'CSS must scale font on :root for 130%');
+  assert.ok(css.includes(':root[data-text-size="150"]'), 'CSS must scale font on :root for 150%');
+  assert.ok(css.includes(':root[data-text-size="175"]'), 'CSS must scale font on :root for 175%');
+  assert.ok(html.includes('value="130" checked> Default'), 'Default must be 130 and checked');
+  assert.ok(html.includes('value="150"> Large (150%)'), 'Large must be 150');
+  assert.ok(html.includes('value="175"> Extra Large (175%)'), 'Extra large must be 175');
   assert.ok(css.includes('font-size: calc(16px * var(--font-scale, 1));'), 'html must scale font-size using --font-scale');
 });
 
@@ -485,3 +489,49 @@ test('12. color blind settings, player counter removed from games config, start 
   assert.ok(css.includes('font-size: 1.35rem;'), '#btn-start-game must have enlarged font-size');
 });
 
+test('13. robot demo view cleanups: auto-legs tracking, removal of tips and camera help, removed stage headers/footers, and Watch Moshi Mirror title', () => {
+  const css = readFileSync(new URL('../src/style.css', import.meta.url), 'utf-8');
+  const mainJs = readFileSync(new URL('../src/main.js', import.meta.url), 'utf-8');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf-8');
+
+  const gameViewHtml = html.slice(html.indexOf('id="view-game"'), html.indexOf('id="video"'));
+
+  // 1. Legs checkbox removed and automatic leg tracking in main.js
+  assert.ok(!gameViewHtml.includes('id="legs"'), 'Legs checkbox must be removed from robot demo');
+  assert.ok(!gameViewHtml.includes('id="legs-label"'), 'Legs label must be removed from robot demo');
+  assert.ok(!gameViewHtml.includes('Follow legs too'), 'Follow legs text must be removed from robot demo');
+  assert.ok(mainJs.includes('followLegs = Boolean(latest.worldLandmarks'), 'main.js must automatically track legs when in frame');
+
+  // 2. Ergonomic movement tips and camera help removed
+  assert.ok(!gameViewHtml.includes('Ergonomic movement tips'), 'Ergonomic movement tips must be removed from robot demo');
+  assert.ok(!gameViewHtml.includes('Camera help'), 'Camera help must be removed from robot demo');
+  assert.ok(!gameViewHtml.includes('<details>'), 'details tag must be removed from robot demo');
+
+  // 3. Stage header text on the left and stage footer removed
+  assert.ok(!gameViewHtml.includes('id="game-stage-label"'), 'game-stage-label must be removed');
+  assert.ok(!gameViewHtml.includes('id="game-stage-title"'), 'game-stage-title must be removed');
+  assert.ok(!gameViewHtml.includes('class="stage-footer"'), 'stage-footer must be removed');
+  assert.ok(!gameViewHtml.includes('Ready when you are'), 'Ready when you are must be removed from stage markup');
+
+  // 4. Connect and move together replaced with Watch Moshi Mirror Your Every Move!
+  assert.ok(!gameViewHtml.includes('01 / CONNECT'), '01 / CONNECT must be removed');
+  assert.ok(!gameViewHtml.includes('Move together.'), 'Move together. must be removed');
+  assert.ok(gameViewHtml.includes('Watch Moshi Mirror Your Every Move!'), 'Watch Moshi Mirror Your Every Move! heading must be present');
+});
+
+test('14. camera aside skeleton overlay mirrors coordinates horizontally to match the mirrored camera video feed', () => {
+  const mainJs = readFileSync(new URL('../src/main.js', import.meta.url), 'utf-8');
+
+  // Verify that both game camera canvas and its skeleton overlay mirror X coordinates
+  assert.ok(mainJs.includes('gameCtx.scale(-1, 1);'), 'Game camera canvas must mirror video horizontally');
+  assert.ok(
+    mainJs.includes('(1 - points[a].x) * overlay.width') &&
+    mainJs.includes('(1 - points[b].x) * overlay.width'),
+    'Skeleton overlay on game aside must mirror X coordinates (1 - points[i].x) to match mirrored video'
+  );
+  assert.ok(
+    mainJs.includes('overlay.width = video.videoWidth;') &&
+    mainJs.includes('overlay.height = video.videoHeight;'),
+    'Overlay canvas dimensions must stay synced with video and gameCamCanvas'
+  );
+});

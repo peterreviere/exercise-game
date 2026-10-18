@@ -9,9 +9,9 @@
 export const GAMES_CONFIG = [
   {
     id: 'robot-buddy-1',
-    title: 'Robot Mirror Buddy',
+    title: 'Robot Mirror Buddy Demo',
     subtitle: 'Gentle Mirror Motion Practice',
-    description: 'Follow and mirror Blue, your animated robot buddy. Practice upper-body reach, side bends, and arm lifts with real-time pose tracking.',
+    description: 'Follow and mirror Moshi, your animated robot buddy. Practice upper-body reach, side bends, and arm lifts with real-time pose tracking.',
     status: 'Ready to Play',
     image: `${import.meta.env?.BASE_URL || './'}robot/preview.png`,
     intensity: 'Gentle (Low Strain)',

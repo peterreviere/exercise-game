@@ -5,7 +5,7 @@
 
 :root {
   --font-main: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-scale: 1;
+  --font-scale: 1.30;
 
   /* Calming, high-contrast, minimalist palette (zero emojis) */
   --bg-app: #f4f7f8;
@@ -182,24 +182,33 @@ body[data-colorblind="achromatopsia"] {
   filter: grayscale(100%);
 }
 
-/* Text Scaling */
+/* Text Scaling: Default 130%, Large 150%, Extra Large 175% */
+:root:not([data-text-size]),
 :root[data-text-size="100"],
-html[data-text-size="100"],
-body[data-text-size="100"] {
-  --font-scale: 1;
-  font-size: 16px;
-}
 :root[data-text-size="115"],
-html[data-text-size="115"],
-body[data-text-size="115"] {
-  --font-scale: 1.15;
-  font-size: 18.4px;
-}
 :root[data-text-size="130"],
+html:not([data-text-size]),
+html[data-text-size="100"],
+html[data-text-size="115"],
 html[data-text-size="130"],
+body:not([data-text-size]),
+body[data-text-size="100"],
+body[data-text-size="115"],
 body[data-text-size="130"] {
   --font-scale: 1.30;
   font-size: 20.8px;
+}
+:root[data-text-size="150"],
+html[data-text-size="150"],
+body[data-text-size="150"] {
+  --font-scale: 1.50;
+  font-size: 24px;
+}
+:root[data-text-size="175"],
+html[data-text-size="175"],
+body[data-text-size="175"] {
+  --font-scale: 1.75;
+  font-size: 28px;
 }
 
 /* --------------------------------------------------------------------------
@@ -1240,7 +1249,7 @@ body[data-theme="high"] .stage {
 
 #viewport {
   position: absolute;
-  inset: 65px 0 40px;
+  inset: 0;
 }
 
 #viewport canvas {
@@ -1535,6 +1544,15 @@ body[data-theme="high"] .boxing-forecast {
   font-size: 26px;
   letter-spacing: -1px;
   font-weight: 600;
+}
+
+.aside-mirror-title {
+  font-size: clamp(20px, 2.2vw, 26px);
+  letter-spacing: -0.6px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-main);
+  margin: 0;
 }
 
 .game-aside p {
