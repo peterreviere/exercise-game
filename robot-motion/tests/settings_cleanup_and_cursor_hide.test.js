@@ -489,3 +489,34 @@ test('12. color blind settings, player counter removed from games config, start 
   assert.ok(css.includes('font-size: 1.35rem;'), '#btn-start-game must have enlarged font-size');
 });
 
+test('13. robot demo view cleanups: auto-legs tracking, removal of tips and camera help, removed stage headers/footers, and Watch Moshi Mirror title', () => {
+  const css = readFileSync(new URL('../src/style.css', import.meta.url), 'utf-8');
+  const mainJs = readFileSync(new URL('../src/main.js', import.meta.url), 'utf-8');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf-8');
+
+  const gameViewHtml = html.slice(html.indexOf('id="view-game"'), html.indexOf('id="video"'));
+
+  // 1. Legs checkbox removed and automatic leg tracking in main.js
+  assert.ok(!gameViewHtml.includes('id="legs"'), 'Legs checkbox must be removed from robot demo');
+  assert.ok(!gameViewHtml.includes('id="legs-label"'), 'Legs label must be removed from robot demo');
+  assert.ok(!gameViewHtml.includes('Follow legs too'), 'Follow legs text must be removed from robot demo');
+  assert.ok(mainJs.includes('followLegs = Boolean(latest.worldLandmarks'), 'main.js must automatically track legs when in frame');
+
+  // 2. Ergonomic movement tips and camera help removed
+  assert.ok(!gameViewHtml.includes('Ergonomic movement tips'), 'Ergonomic movement tips must be removed from robot demo');
+  assert.ok(!gameViewHtml.includes('Camera help'), 'Camera help must be removed from robot demo');
+  assert.ok(!gameViewHtml.includes('<details>'), 'details tag must be removed from robot demo');
+
+  // 3. Stage header text on the left and stage footer removed
+  assert.ok(!gameViewHtml.includes('id="game-stage-label"'), 'game-stage-label must be removed');
+  assert.ok(!gameViewHtml.includes('id="game-stage-title"'), 'game-stage-title must be removed');
+  assert.ok(!gameViewHtml.includes('class="stage-footer"'), 'stage-footer must be removed');
+  assert.ok(!gameViewHtml.includes('Ready when you are'), 'Ready when you are must be removed from stage markup');
+
+  // 4. Connect and move together replaced with Watch Moshi Mirror Your Every Move!
+  assert.ok(!gameViewHtml.includes('01 / CONNECT'), '01 / CONNECT must be removed');
+  assert.ok(!gameViewHtml.includes('Move together.'), 'Move together. must be removed');
+  assert.ok(gameViewHtml.includes('Watch Moshi Mirror Your Every Move!'), 'Watch Moshi Mirror Your Every Move! heading must be present');
+});
+
+

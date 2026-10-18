@@ -368,7 +368,7 @@ function stopCamera() {
   $('start').disabled = false;
   $('stop').disabled = true;
   $('demo').textContent = 'Try demo';
-  $('pose').textContent = 'Ready when you are';
+  if ($('pose')) $('pose').textContent = 'Ready when you are';
   status('Camera off. Ready when you are.');
 
   // Update header camera toggle
@@ -507,7 +507,7 @@ $('demo').onclick = () => {
   mode = 'demo';
   $('demo').textContent = 'End demo';
   $('stop').disabled = false;
-  $('pose').textContent = 'Demo · no camera';
+  if ($('pose')) $('pose').textContent = 'Demo · no camera';
   status('Demo animation. Start camera to follow your own movement.');
 };
 
@@ -553,20 +553,6 @@ function setPostureMode(newMode = 'standing', announce = true) {
   // Update Dialog Radio if present
   const radio = document.querySelector(`input[name="setting-posture"][value="standing"]`);
   if (radio) radio.checked = true;
-
-  // Update Legs option in Game View
-  const legsInput = $('legs');
-  const legsHelper = $('legs-helper');
-  if (legsInput) {
-    legsInput.disabled = false;
-  }
-  if (legsHelper) {
-    legsHelper.textContent = 'Full body must be visible';
-  }
-  const ergoTip = $('ergonomic-tip');
-  if (ergoTip) {
-    ergoTip.textContent = 'In standing mode, stand with full body in frame for whole-body tracking.';
-  }
 
   if (announce) {
     soundEffects.playPostureSwitch();
@@ -1960,7 +1946,7 @@ function animate(now) {
             lastSeen = now;
             const poses = classifier.update(frame.landmarks, frame.worldLandmarks, now);
             const poseName = poses[0]?.name || 'Following your movement';
-            $('pose').textContent = poseName;
+            if ($('pose')) $('pose').textContent = poseName;
             if (!wasTracking) {
               status('Tracking live · mirror mode');
             }
@@ -2013,7 +1999,8 @@ function animate(now) {
       }
 
       if (mode === 'camera' && latest && now - lastSeen < 450) {
-        const followLegs = postureMode === 'standing' && $('legs').checked;
+        // Automatically follow legs if legs are in frame
+        const followLegs = Boolean(latest.worldLandmarks && ([25, 26, 27, 28].some(i => (latest.worldLandmarks[i]?.visibility ?? 1) > 0.45)));
         rig.apply(latest.worldLandmarks, dt, followLegs);
       } else if (isWelcomePreviewActive) {
         // Friendly greeting wave from Blue while in the welcome setup dialog
@@ -2023,7 +2010,7 @@ function animate(now) {
         if (now - lastSeen > 700 && mode === 'camera') {
           latest = null;
           wasTracking = false;
-          $('pose').textContent = 'Step into view';
+          if ($('pose')) $('pose').textContent = 'Step into view';
           status('Body not visible. Keep shoulders and chest in frame.');
           cursorLeftEl.classList.add('hidden');
           cursorRightEl.classList.add('hidden');
