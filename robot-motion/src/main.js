@@ -564,6 +564,9 @@ const stretchingState = {
   moves: 0,
 };
 
+let stretchingLastStepAt = 0;
+let stretchingPrevStepMetrics = { left: false, right: false };
+
 function prepareStretchObject(root, isCollectible = false) {
   root.traverse((object) => {
     if (!object.isMesh) return;
@@ -611,9 +614,23 @@ function spawnWingPart() {
   renderStretchingUI();
 }
 
+function showStretchingEndScreen() {
+  stretchingState.phase = 'complete';
+  soundEffects.playComplete();
+  status('Launch sequence ready! Moshi is fully calibrated and prepped.');
+  const el = $('stretching-end-screen');
+  if (el) el.hidden = false;
+}
+
+function hideStretchingEndScreen() {
+  const el = $('stretching-end-screen');
+  if (el) el.hidden = true;
+}
+
 function initStretchingSection(secIndex) {
   stretchingState.section = secIndex;
   stretchingState.hold = 0;
+  hideStretchingEndScreen();
   stretchingEnvironments.forEach((env, idx) => {
     env.visible = idx === secIndex;
   });
@@ -629,6 +646,9 @@ function initStretchingSection(secIndex) {
     itemAuraGroup.visible = false;
   } else if (secIndex === 2) {
     stretchingState.steps = 0;
+    stretchingState.phase = 'march';
+    stretchingLastStepAt = 0;
+    stretchingPrevStepMetrics = { left: false, right: false };
     clearActiveProp();
     itemAuraGroup.visible = false;
   }
@@ -699,9 +719,7 @@ function skipStretchingStep() {
   } else if (stretchingState.section === 2) {
     stretchingState.steps += 2;
     if (stretchingState.steps >= 8) {
-      soundEffects.playComplete();
-      status('Stretching adventure complete! Great job maintaining healthy motion.');
-      initStretchingSection(0);
+      showStretchingEndScreen();
     }
   }
   renderStretchingUI();
@@ -779,16 +797,22 @@ function updateStretchingMotion(lm, worldLm, dt, now) {
       }
     }
   } else if (stretchingState.section === 2) {
+    if (stretchingState.phase === 'complete') return;
     const metrics = bodyMetrics(lm);
-    if (metrics.leftKnee || metrics.rightKnee || metrics.leftHandUp || metrics.rightHandUp) {
+    const left = Boolean(metrics.leftKnee || metrics.leftHandUp);
+    const right = Boolean(metrics.rightKnee || metrics.rightHandUp);
+    const isNewStep = (left && !stretchingPrevStepMetrics.left) || (right && !stretchingPrevStepMetrics.right);
+    stretchingPrevStepMetrics = { left, right };
+
+    if (isNewStep && (now - stretchingLastStepAt >= 380)) {
+      stretchingLastStepAt = now;
       stretchingState.steps++;
       soundEffects.playStep();
-      if (stretchingState.steps >= 8) {
-        soundEffects.playComplete();
-        status('Launch sequence ready! Moshi is fully calibrated and prepped.');
-        initStretchingSection(0);
-      }
+      triggerSparks(playerStage.position, 0xffaa44);
       renderStretchingUI();
+      if (stretchingState.steps >= 8) {
+        showStretchingEndScreen();
+      }
     }
   }
 }
@@ -1455,7 +1479,7 @@ function configureActiveGame() {
     renderFlightUI();
   } else if (isStretching) {
     playerStage.position.set(0, 0, 0);
-    playerStage.rotation.set(0, Math.PI, 0);
+    playerStage.rotation.set(0, 0, 0);
     playerStage.scale.setScalar(1);
     playerStage.updateMatrixWorld(true);
     camera.fov = 36;
@@ -1463,6 +1487,7 @@ function configureActiveGame() {
     camera.lookAt(0, 1.7, 0);
     camera.updateProjectionMatrix();
     if (robotWingsModel) robotWingsModel.visible = false;
+    hideStretchingEndScreen();
     initStretchingSection(0);
   } else {
     playerStage.position.set(0, 0, 0);
@@ -1614,6 +1639,7 @@ function returnToCarousel() {
   if ($('flying-horizon')) $('flying-horizon').hidden = true;
   if ($('flying-player-strip')) $('flying-player-strip').hidden = true;
   hideFlightEndScreen();
+  hideStretchingEndScreen();
   if ($('flying-panel')) $('flying-panel').hidden = true;
   stretchingGroup.visible = false;
   if ($('stretching-hud')) $('stretching-hud').hidden = true;
@@ -1673,6 +1699,9 @@ if ($('flying-launch-btn')) $('flying-launch-btn').onclick = startFlightRun;
 if ($('flying-start-round')) $('flying-start-round').onclick = startFlightRun;
 if ($('btn-flying-replay')) $('btn-flying-replay').onclick = startFlightRun;
 if ($('btn-flying-menu')) $('btn-flying-menu').onclick = returnToCarousel;
+
+if ($('btn-stretching-replay')) $('btn-stretching-replay').onclick = () => initStretchingSection(0);
+if ($('btn-stretching-menu')) $('btn-stretching-menu').onclick = returnToCarousel;
 
 if ($('stretching-skip-btn')) {
   $('stretching-skip-btn').onclick = () => {
