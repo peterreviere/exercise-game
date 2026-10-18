@@ -9,6 +9,9 @@ import { GAMES_CONFIG } from './gamesConfig.js';
 import { soundEffects } from './audioFeedback.js';
 import { BoxingRound, PunchMotionDetector, calibrateBoxingPose, detectBoxingMove } from './boxingGame.js';
 import { BoxingOpponent } from './boxingOpponent.js';
+import { WingFlightController, FlightRace, flightInput } from './flightGame.js';
+import { RobotWingRig } from './wingRig.js';
+import { wristPositions, wristNear, bodyMetrics, movementThreshold } from './stretchingGame.js';
 
 // DOM Utilities
 const $ = (id) => document.getElementById(id);
@@ -169,6 +172,599 @@ boxingImpact.position.set(0, 1.55, 0.05);
 boxingImpact.visible = false;
 scene.add(boxingImpact);
 let boxingImpactAt = -Infinity;
+
+// ============================================================================
+// Flying Adventure 3D Scene Components
+// ============================================================================
+const flyingGroup = new THREE.Group();
+flyingGroup.name = 'Flying Adventure Group';
+flyingGroup.visible = false;
+scene.add(flyingGroup);
+
+const starCount = 460;
+const starPositions = new Float32Array(starCount * 3);
+for (let index = 0; index < starCount; index += 1) {
+  starPositions[index * 3] = (Math.random() - 0.5) * 20;
+  starPositions[index * 3 + 1] = Math.random() * 9 - 1;
+  starPositions[index * 3 + 2] = Math.random() * -38 + 4;
+}
+const starGeometry = new THREE.BufferGeometry();
+starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+const flightStars = new THREE.Points(
+  starGeometry,
+  new THREE.PointsMaterial({ color: 0xbceaff, size: 0.045, transparent: true, opacity: 0.72 })
+);
+flyingGroup.add(flightStars);
+
+const flightCloudMaterial = new THREE.MeshBasicMaterial({ color: 0x8dcfff, transparent: true, opacity: 0.055, depthWrite: false });
+const flightClouds = Array.from({ length: 9 }, (_, index) => {
+  const cloud = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4 + Math.random() * 1.7, 1), flightCloudMaterial);
+  cloud.scale.set(2.8, 0.45, 1);
+  cloud.position.set((Math.random() - 0.5) * 16, Math.random() * 6 - 0.5, -6 - index * 4.5);
+  flyingGroup.add(cloud);
+  return cloud;
+});
+
+const flightGateMaterial = new THREE.MeshBasicMaterial({ color: 0x2ab7ff, toneMapped: false });
+const flightHaloMaterial = new THREE.MeshBasicMaterial({ color: 0x8ee6ff, transparent: true, opacity: 0.16, depthWrite: false, toneMapped: false });
+const flightGates = [];
+let flightGateSequence = 0;
+
+function flightGateTarget(sequence) {
+  return {
+    x: Math.sin(sequence * 2.13) * 1.45,
+    y: 1.5 + Math.sin(sequence * 1.37 + 0.5) * 0.95,
+  };
+}
+
+function createFlightGate(index) {
+  const group = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 18, 72), flightGateMaterial.clone());
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.14, 12, 72), flightHaloMaterial.clone());
+  group.add(halo, ring);
+  group.userData = { sequence: index, evaluated: false, flash: 0, ring, halo };
+  flyingGroup.add(group);
+  flightGates.push(group);
+  return group;
+}
+
+function placeFlightGate(gate, sequence, z) {
+  const target = flightGateTarget(sequence);
+  gate.position.set(target.x, target.y, z);
+  gate.userData.sequence = sequence;
+  gate.userData.evaluated = false;
+  gate.userData.flash = 0;
+  gate.userData.ring.material.color.setHex(0x2ab7ff);
+  gate.userData.halo.material.color.setHex(0x8ee6ff);
+}
+
+for (let index = 0; index < 6; index += 1) createFlightGate(index);
+
+function resetFlightCourse() {
+  flightGateSequence = flightGates.length;
+  flightGates.forEach((gate, index) => placeFlightGate(gate, index, -7 - index * 8.2));
+}
+resetFlightCourse();
+
+const engineGlow = new THREE.Mesh(
+  new THREE.SphereGeometry(0.16, 20, 12),
+  new THREE.MeshBasicMaterial({ color: 0x69d9ff, transparent: true, opacity: 0.8, toneMapped: false }),
+);
+engineGlow.scale.set(1, 2.7, 1);
+engineGlow.visible = false;
+flyingGroup.add(engineGlow);
+
+const flightRace = new FlightRace({ durationMs: 60_000 });
+const wingController = new WingFlightController();
+let robotWingRig = null;
+let robotWingsModel = null;
+let flightAltitude = 0.6;
+let flightVerticalVelocity = 0;
+let lastFlapVisualAt = -Infinity;
+let currentFlightInput = { x: 0, wingHeight: 0, wingReach: 0, dive: 0, gliding: false, flap: false, active: false };
+
+function renderFlightUI() {
+  const timeLeftSec = Math.ceil(flightRace.timeLeft(performance.now()) / 1000);
+  const mm = String(Math.floor(timeLeftSec / 60)).padStart(2, '0');
+  const ss = String(timeLeftSec % 60).padStart(2, '0');
+  if ($('flying-time')) $('flying-time').textContent = `${mm}:${ss}`;
+  if ($('flying-score')) $('flying-score').textContent = String(flightRace.score);
+  if ($('flying-combo')) $('flying-combo').textContent = `${flightRace.combo}x`;
+  if ($('flying-panel-rings')) $('flying-panel-rings').textContent = String(flightRace.rings);
+  if ($('flight-boost-fill')) {
+    const boostPct = Math.round(((flightAltitude - (-0.35)) / (1.65 - (-0.35))) * 100);
+    $('flight-boost-fill').style.width = `${Math.max(10, Math.min(100, boostPct))}%`;
+  }
+}
+
+// ============================================================================
+// Stretching Adventure 3D Scene Components (Fun Sunset Atmosphere)
+// ============================================================================
+const stretchingGroup = new THREE.Group();
+stretchingGroup.name = 'Stretching Adventure Group';
+stretchingGroup.visible = false;
+scene.add(stretchingGroup);
+
+// Sun on the horizon
+const sunGroup = new THREE.Group();
+sunGroup.position.set(4.5, 3.2, -32);
+const sunOrb = new THREE.Mesh(
+  new THREE.SphereGeometry(3.6, 32, 16),
+  new THREE.MeshBasicMaterial({ color: 0xffe27a, toneMapped: false })
+);
+const sunCorona = new THREE.Mesh(
+  new THREE.RingGeometry(3.4, 5.8, 48),
+  new THREE.MeshBasicMaterial({
+    color: 0xff8833,
+    transparent: true,
+    opacity: 0.85,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+  })
+);
+const sunGlow = new THREE.Mesh(
+  new THREE.RingGeometry(5.2, 12.0, 48),
+  new THREE.MeshBasicMaterial({
+    color: 0xff4444,
+    transparent: true,
+    opacity: 0.45,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+  })
+);
+sunGroup.add(sunOrb, sunCorona, sunGlow);
+stretchingGroup.add(sunGroup);
+
+// Twinkling Dusk Stars (Golden and Rose Tints)
+const duskStarCount = 420;
+const duskStarPositions = new Float32Array(duskStarCount * 3);
+const duskStarColors = new Float32Array(duskStarCount * 3);
+for (let i = 0; i < duskStarCount; i++) {
+  duskStarPositions[i * 3] = (Math.random() - 0.5) * 40;
+  duskStarPositions[i * 3 + 1] = Math.random() * 16 + 2;
+  duskStarPositions[i * 3 + 2] = Math.random() * -45 + 5;
+  const isRose = Math.random() > 0.5;
+  duskStarColors[i * 3] = 1.0;
+  duskStarColors[i * 3 + 1] = isRose ? 0.78 : 0.88;
+  duskStarColors[i * 3 + 2] = isRose ? 0.85 : 0.65;
+}
+const duskStarGeo = new THREE.BufferGeometry();
+duskStarGeo.setAttribute('position', new THREE.BufferAttribute(duskStarPositions, 3));
+duskStarGeo.setAttribute('color', new THREE.BufferAttribute(duskStarColors, 3));
+const duskStars = new THREE.Points(
+  duskStarGeo,
+  new THREE.PointsMaterial({ size: 0.045, vertexColors: true, transparent: true, opacity: 0.75 })
+);
+stretchingGroup.add(duskStars);
+
+// Peach Volumetric Clouds
+const peachCloudMaterial = new THREE.MeshBasicMaterial({
+  color: 0xff9f70,
+  transparent: true,
+  opacity: 0.16,
+  depthWrite: false,
+});
+const peachClouds = Array.from({ length: 8 }, (_, index) => {
+  const cloud = new THREE.Mesh(new THREE.IcosahedronGeometry(2.2 + Math.random() * 2.2, 1), peachCloudMaterial);
+  cloud.scale.set(2.8, 0.45, 1.1);
+  cloud.position.set((Math.random() - 0.5) * 28, Math.random() * 6 + 1.2, -9 - index * 4);
+  stretchingGroup.add(cloud);
+  return cloud;
+});
+
+// Pedestal
+const pedestalGeo = new THREE.RingGeometry(1.4, 1.55, 48);
+const pedestalMat = new THREE.MeshBasicMaterial({
+  color: 0xff9142,
+  side: THREE.DoubleSide,
+  transparent: true,
+  opacity: 0.5,
+});
+const pedestal = new THREE.Mesh(pedestalGeo, pedestalMat);
+pedestal.rotation.x = Math.PI / 2;
+pedestal.position.set(0, 0.02, 0);
+stretchingGroup.add(pedestal);
+
+// High-Tech Collectible Rig
+const itemAuraGroup = new THREE.Group();
+const beamGeo = new THREE.CylinderGeometry(0.75, 0.75, 11, 24, 1, true);
+const beamMat = new THREE.MeshBasicMaterial({
+  color: 0xffb84d,
+  transparent: true,
+  opacity: 0.16,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const sunbeam = new THREE.Mesh(beamGeo, beamMat);
+itemAuraGroup.add(sunbeam);
+
+const gyro1 = new THREE.Mesh(
+  new THREE.TorusGeometry(0.95, 0.04, 16, 54),
+  new THREE.MeshBasicMaterial({ color: 0xff9f43, toneMapped: false })
+);
+const gyro2 = new THREE.Mesh(
+  new THREE.TorusGeometry(0.78, 0.028, 16, 54),
+  new THREE.MeshBasicMaterial({ color: 0x58eaff, toneMapped: false })
+);
+gyro2.rotation.x = Math.PI / 3;
+gyro2.rotation.y = Math.PI / 4;
+itemAuraGroup.add(gyro1, gyro2);
+
+const itemCoreOrb = new THREE.Mesh(
+  new THREE.SphereGeometry(0.35, 16, 12),
+  new THREE.MeshBasicMaterial({
+    color: 0xfff0aa,
+    transparent: true,
+    opacity: 0.35,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  })
+);
+itemAuraGroup.add(itemCoreOrb);
+
+const dustCount = 24;
+const dustPositions = new Float32Array(dustCount * 3);
+for (let i = 0; i < dustCount; i++) {
+  const theta = (i / dustCount) * Math.PI * 2;
+  const rad = 0.9 + (i % 3) * 0.2;
+  dustPositions[i * 3] = Math.cos(theta) * rad;
+  dustPositions[i * 3 + 1] = ((i % 5) - 2) * 0.25;
+  dustPositions[i * 3 + 2] = Math.sin(theta) * rad;
+}
+const dustGeo = new THREE.BufferGeometry();
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+const dustPoints = new THREE.Points(
+  dustGeo,
+  new THREE.PointsMaterial({
+    color: 0xffe270,
+    size: 0.08,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+  })
+);
+itemAuraGroup.add(dustPoints);
+itemAuraGroup.visible = false;
+stretchingGroup.add(itemAuraGroup);
+
+// Socket Beacon on Moshi's back
+const socketBeacon = new THREE.Group();
+socketBeacon.position.set(0, 1.35, 0.22);
+const socketRing1 = new THREE.Mesh(
+  new THREE.TorusGeometry(0.55, 0.04, 16, 48),
+  new THREE.MeshBasicMaterial({ color: 0xffd043, toneMapped: false })
+);
+const socketRing2 = new THREE.Mesh(
+  new THREE.TorusGeometry(0.38, 0.025, 16, 48),
+  new THREE.MeshBasicMaterial({ color: 0xff7e38, toneMapped: false })
+);
+socketRing2.rotation.x = Math.PI / 4;
+const socketHalo = new THREE.Mesh(
+  new THREE.RingGeometry(0.2, 0.65, 32),
+  new THREE.MeshBasicMaterial({
+    color: 0xffb84d,
+    transparent: true,
+    opacity: 0.3,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+  })
+);
+socketBeacon.add(socketRing1, socketRing2, socketHalo);
+socketBeacon.visible = false;
+stretchingGroup.add(socketBeacon);
+
+// Sparks on Hit / Collect
+const sparkCount = 36;
+const sparkPositions = new Float32Array(sparkCount * 3);
+const sparkVelocities = Array.from({ length: sparkCount }, () => new THREE.Vector3());
+const sparkGeo = new THREE.BufferGeometry();
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+const sparkMat = new THREE.PointsMaterial({
+  color: 0xffc74f,
+  size: 0.11,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+});
+const sparks = new THREE.Points(sparkGeo, sparkMat);
+stretchingGroup.add(sparks);
+let sparksLifetime = 0;
+
+function triggerSparks(pos, colorHex = 0xffc74f) {
+  sparkMat.color.setHex(colorHex);
+  sparkMat.opacity = 1;
+  sparksLifetime = 0.5;
+  for (let i = 0; i < sparkCount; i++) {
+    sparkPositions[i * 3] = pos.x;
+    sparkPositions[i * 3 + 1] = pos.y;
+    sparkPositions[i * 3 + 2] = pos.z;
+    sparkVelocities[i].set(
+      (Math.random() - 0.5) * 5.5,
+      (Math.random() - 0.5) * 5.5 + 1.5,
+      (Math.random() - 0.5) * 5.5
+    );
+  }
+  sparkGeo.attributes.position.needsUpdate = true;
+}
+
+// Comet Trail
+const trailCount = 20;
+const trailPositions = new Float32Array(trailCount * 3);
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+const trailMat = new THREE.PointsMaterial({
+  color: 0xffa844,
+  size: 0.14,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+});
+const trailPoints = new THREE.Points(trailGeo, trailMat);
+stretchingGroup.add(trailPoints);
+
+// Environments & Props
+const stretchingEnvironments = [];
+let stretchingPropsSource = null;
+let activeProp = null;
+let attachedWings = null;
+
+const CHAPTERS = [
+  { name: 'BUILD THE WINGS', title: 'Reach for the parts', icon: '↔', fog: 0x351244 },
+  { name: 'RESTORE POWER', title: 'Lean and charge', icon: '↗', fog: 0x3d0d3d },
+  { name: 'INITIATE LAUNCH', title: 'March to the pad', icon: '⇧', fog: 0x240838 },
+];
+
+const PART_TARGETS = [
+  { x: 0.15, y: 0.58, world: [-3.5, 1.35, 0.1], label: 'Reach Left', key: 'ArrowLeft' },
+  { x: 0.85, y: 0.56, world: [3.5, 1.42, 0.1], label: 'Reach Right', key: 'ArrowRight' },
+  { x: 0.28, y: 0.24, world: [-2.1, 3.55, 0.1], label: 'Reach Overhead', key: 'ArrowUp' },
+  { x: 0.72, y: 0.22, world: [2.1, 3.7, 0.1], label: 'Reach Overhead', key: 'ArrowUp' },
+  { x: 0.12, y: 0.38, world: [-3.9, 2.45, 0.1], label: 'Reach Diagonal', key: 'ArrowLeft' },
+  { x: 0.88, y: 0.35, world: [3.9, 2.55, 0.1], label: 'Reach Diagonal', key: 'ArrowRight' },
+];
+
+const stretchingState = {
+  section: 0,
+  phase: 'collect',
+  part: 0,
+  grabbedWrist: null,
+  cell: 0,
+  steps: 0,
+  hold: 0,
+  moves: 0,
+};
+
+function prepareStretchObject(root, isCollectible = false) {
+  root.traverse((object) => {
+    if (!object.isMesh) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
+    if (object.material) {
+      object.material = object.material.clone();
+      if (isCollectible) {
+        object.material.roughness = 0.18;
+        object.material.metalness = 0.85;
+        object.material.emissive = new THREE.Color(0xff8822);
+        object.material.emissiveIntensity = 0.55;
+      }
+    }
+  });
+  return root;
+}
+
+function clearActiveProp() {
+  if (activeProp) {
+    stretchingGroup.remove(activeProp);
+    activeProp = null;
+  }
+}
+
+function cloneProp(name, position, scale = 1) {
+  clearActiveProp();
+  const source = stretchingPropsSource?.getObjectByName(name);
+  if (!source) return null;
+  activeProp = prepareStretchObject(source.clone(true), true);
+  activeProp.position.set(...position);
+  activeProp.scale.setScalar(scale);
+  stretchingGroup.add(activeProp);
+  return activeProp;
+}
+
+function spawnWingPart() {
+  const target = PART_TARGETS[stretchingState.part];
+  if (!target) return;
+  cloneProp(`Collectible_Wing_${stretchingState.part + 1}`, target.world, 1.05);
+  itemAuraGroup.position.set(...target.world);
+  itemAuraGroup.visible = true;
+  socketBeacon.visible = false;
+  trailMat.opacity = 0;
+  renderStretchingUI();
+}
+
+function initStretchingSection(secIndex) {
+  stretchingState.section = secIndex;
+  stretchingState.hold = 0;
+  stretchingEnvironments.forEach((env, idx) => {
+    env.visible = idx === secIndex;
+  });
+  if (secIndex === 0) {
+    stretchingState.phase = 'collect';
+    stretchingState.part = 0;
+    stretchingState.grabbedWrist = null;
+    if (attachedWings) attachedWings.visible = false;
+    spawnWingPart();
+  } else if (secIndex === 1) {
+    stretchingState.cell = 0;
+    clearActiveProp();
+    itemAuraGroup.visible = false;
+  } else if (secIndex === 2) {
+    stretchingState.steps = 0;
+    clearActiveProp();
+    itemAuraGroup.visible = false;
+  }
+  renderStretchingUI();
+}
+
+function renderStretchingUI() {
+  const chapter = CHAPTERS[stretchingState.section] || CHAPTERS[0];
+  if ($('stretching-chapter-badge')) $('stretching-chapter-badge').textContent = `SECTOR 0${stretchingState.section + 1}`;
+  if ($('stretching-chapter-title')) $('stretching-chapter-title').textContent = chapter.name;
+  if ($('stretching-instruction-icon')) $('stretching-instruction-icon').textContent = chapter.icon;
+
+  if (stretchingState.section === 0) {
+    if (stretchingState.phase === 'collect') {
+      const target = PART_TARGETS[stretchingState.part];
+      if ($('stretching-progress-text')) $('stretching-progress-text').textContent = `${stretchingState.part} / 6 PARTS`;
+      if ($('stretching-progress-fill')) $('stretching-progress-fill').style.width = `${(stretchingState.part / 6) * 100}%`;
+      if ($('stretching-instruction-badge')) $('stretching-instruction-badge').textContent = stretchingState.grabbedWrist !== null ? 'DELIVER WING' : 'REACH FOR WING';
+      if ($('stretching-instruction-text')) $('stretching-instruction-text').textContent = stretchingState.grabbedWrist !== null ? 'Bring the wing part into Moshi’s back socket' : `Reach toward the glowing ${target?.label || 'part'}`;
+      if ($('stretching-hold')) $('stretching-hold').classList.add('hidden');
+    } else if (stretchingState.phase === 'assemble') {
+      if ($('stretching-progress-text')) $('stretching-progress-text').textContent = 'CALIBRATING WINGS';
+      if ($('stretching-progress-fill')) $('stretching-progress-fill').style.width = '100%';
+      if ($('stretching-instruction-badge')) $('stretching-instruction-badge').textContent = 'LOCK WINGSPAN';
+      if ($('stretching-instruction-text')) $('stretching-instruction-text').textContent = 'Hold arms wide to lock wings';
+      if ($('stretching-hold')) $('stretching-hold').classList.remove('hidden');
+      if ($('stretching-hold-fill')) $('stretching-hold-fill').style.width = `${Math.min(100, (stretchingState.hold / 1.5) * 100)}%`;
+      if ($('stretching-hold-text')) $('stretching-hold-text').textContent = 'Hold arms wide to lock wings';
+    }
+  } else if (stretchingState.section === 1) {
+    if ($('stretching-progress-text')) $('stretching-progress-text').textContent = `${stretchingState.cell} / 4 POWER CELLS`;
+    if ($('stretching-progress-fill')) $('stretching-progress-fill').style.width = `${(stretchingState.cell / 4) * 100}%`;
+    if ($('stretching-instruction-badge')) $('stretching-instruction-badge').textContent = 'LEAN & ALIGN';
+    if ($('stretching-instruction-text')) $('stretching-instruction-text').textContent = 'Lean your torso left or right to charge';
+    if ($('stretching-hold')) $('stretching-hold').classList.add('hidden');
+  } else if (stretchingState.section === 2) {
+    if ($('stretching-progress-text')) $('stretching-progress-text').textContent = `${stretchingState.steps} / 8 STEPS`;
+    if ($('stretching-progress-fill')) $('stretching-progress-fill').style.width = `${(stretchingState.steps / 8) * 100}%`;
+    if ($('stretching-instruction-badge')) $('stretching-instruction-badge').textContent = 'MARCH TO PAD';
+    if ($('stretching-instruction-text')) $('stretching-instruction-text').textContent = 'March or lift knees in place to move forward';
+    if ($('stretching-hold')) $('stretching-hold').classList.add('hidden');
+  }
+}
+
+function skipStretchingStep() {
+  soundEffects.playSelect();
+  if (stretchingState.section === 0) {
+    if (stretchingState.phase === 'collect') {
+      stretchingState.part++;
+      clearActiveProp();
+      if (stretchingState.part >= 6) {
+        stretchingState.phase = 'assemble';
+        if (attachedWings) {
+          attachedWings.visible = true;
+          attachedWings.scale.setScalar(1);
+        }
+      } else {
+        spawnWingPart();
+      }
+    } else if (stretchingState.phase === 'assemble') {
+      initStretchingSection(1);
+    }
+  } else if (stretchingState.section === 1) {
+    stretchingState.cell++;
+    if (stretchingState.cell >= 4) {
+      initStretchingSection(2);
+    }
+  } else if (stretchingState.section === 2) {
+    stretchingState.steps += 2;
+    if (stretchingState.steps >= 8) {
+      soundEffects.playComplete();
+      status('Stretching adventure complete! Great job maintaining healthy motion.');
+      initStretchingSection(0);
+    }
+  }
+  renderStretchingUI();
+}
+
+function updateStretchingMotion(lm, worldLm, dt, now) {
+  if (stretchingState.section === 0) {
+    if (stretchingState.phase === 'collect') {
+      const target = PART_TARGETS[stretchingState.part];
+      if (target && stretchingState.grabbedWrist === null) {
+        const found = wristNear(lm, target, 0.22);
+        if (found) {
+          stretchingState.grabbedWrist = found.index;
+          stretchingState.moves++;
+          soundEffects.playGrab();
+          itemAuraGroup.visible = false;
+          socketBeacon.visible = true;
+          trailMat.opacity = 0.85;
+          if (activeProp) triggerSparks(activeProp.position, 0xffaa44);
+          renderStretchingUI();
+        }
+      } else if (stretchingState.grabbedWrist !== null) {
+        const nearSocket = wristNear(lm, { x: 0.5, y: 0.5 }, 0.26, stretchingState.grabbedWrist);
+        if (nearSocket) {
+          soundEffects.playDeliver();
+          triggerSparks(new THREE.Vector3(0, 1.4, 0.22), 0xffd043);
+          clearActiveProp();
+          stretchingState.part++;
+          stretchingState.grabbedWrist = null;
+          stretchingState.moves++;
+          socketBeacon.visible = false;
+          trailMat.opacity = 0;
+          if (stretchingState.part >= 6) {
+            stretchingState.phase = 'assemble';
+            stretchingState.hold = 0;
+            if (attachedWings) {
+              attachedWings.visible = true;
+              attachedWings.scale.setScalar(1);
+            }
+          } else {
+            spawnWingPart();
+          }
+          renderStretchingUI();
+        }
+      }
+    } else if (stretchingState.phase === 'assemble') {
+      const metrics = bodyMetrics(lm);
+      if (metrics.armsWide) {
+        stretchingState.hold += dt;
+        soundEffects.startHoldHum();
+        if (stretchingState.hold >= 1.5) {
+          soundEffects.stopHoldHum();
+          soundEffects.playComplete();
+          initStretchingSection(1);
+        }
+      } else {
+        stretchingState.hold = Math.max(0, stretchingState.hold - dt * 0.5);
+        soundEffects.stopHoldHum();
+      }
+      renderStretchingUI();
+    }
+  } else if (stretchingState.section === 1) {
+    const metrics = bodyMetrics(lm);
+    if (Math.abs(metrics.lean) > 0.35 || metrics.diagonal) {
+      stretchingState.hold += dt;
+      if (stretchingState.hold >= 1.2) {
+        soundEffects.playDeliver();
+        stretchingState.cell++;
+        stretchingState.hold = 0;
+        if (stretchingState.cell >= 4) {
+          soundEffects.playComplete();
+          initStretchingSection(2);
+        }
+        renderStretchingUI();
+      }
+    }
+  } else if (stretchingState.section === 2) {
+    const metrics = bodyMetrics(lm);
+    if (metrics.leftKnee || metrics.rightKnee || metrics.leftHandUp || metrics.rightHandUp) {
+      stretchingState.steps++;
+      soundEffects.playStep();
+      if (stretchingState.steps >= 8) {
+        soundEffects.playComplete();
+        status('Launch sequence ready! Moshi is fully calibrated and prepped.');
+        initStretchingSection(0);
+      }
+      renderStretchingUI();
+    }
+  }
+}
 
 function applyCameraFraming(isSitting) {
   if (isSitting) {
@@ -393,6 +989,55 @@ new GLTFLoader().load(
   }
 );
 
+const gltfLoader = new GLTFLoader();
+const assetBaseUrl = import.meta.env?.BASE_URL || './';
+
+// Load Wing Rig for Flight Game
+gltfLoader.load(
+  `${assetBaseUrl}robot/robot_wings.glb`,
+  (gltf) => {
+    robotWingsModel = gltf.scene;
+    robotWingsModel.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+    try {
+      robotWingRig = new RobotWingRig(robotWingsModel);
+    } catch (e) {
+      console.warn('Wing rig init:', e);
+    }
+    robotWingsModel.visible = false;
+    scene.add(robotWingsModel);
+  },
+  undefined,
+  (err) => console.warn('Could not load wings:', err)
+);
+
+// Load Stretch Environments & Props
+Promise.all([
+  gltfLoader.loadAsync(`${assetBaseUrl}environments/crash_site.glb`),
+  gltfLoader.loadAsync(`${assetBaseUrl}environments/power_station.glb`),
+  gltfLoader.loadAsync(`${assetBaseUrl}environments/launch_route.glb`),
+  gltfLoader.loadAsync(`${assetBaseUrl}environments/gameplay_props.glb`),
+]).then(([crash, power, launch, props]) => {
+  [crash, power, launch].forEach((envGltf, idx) => {
+    const env = prepareStretchObject(envGltf.scene);
+    env.visible = idx === 0;
+    stretchingEnvironments.push(env);
+    stretchingGroup.add(env);
+  });
+  stretchingPropsSource = props.scene;
+  const wingsProp = stretchingPropsSource.getObjectByName('Robo_Wings')?.clone(true);
+  if (wingsProp) {
+    prepareStretchObject(wingsProp, true);
+    wingsProp.visible = false;
+    attachedWings = wingsProp;
+    playerStage.add(attachedWings);
+  }
+}).catch((err) => console.warn('Stretching assets load notice:', err));
+
 // ============================================================================
 // Camera Controls (Available from Header or Aside)
 // ============================================================================
@@ -412,6 +1057,11 @@ function stopCamera() {
   boxingRecordedCue = null;
   playerHitAt = -Infinity;
   playerHitSide = 0;
+  flightRace.reset();
+  renderFlightUI();
+  stretchingState.hold = 0;
+  soundEffects.stopHoldHum();
+  renderStretchingUI();
   boxingImpactAt = -Infinity;
   boxingImpact.visible = false;
   renderBoxingRound(boxingRound.snapshot(performance.now()));
@@ -721,29 +1371,78 @@ function openGameDetails(index) {
 
 function configureActiveGame() {
   const isBoxing = activeGame.gameType === 'boxing-beat';
+  const isFlying = activeGame.gameType === 'flying';
+  const isStretching = activeGame.gameType === 'stretching';
+
   setPlayerHeadTransparent(isBoxing);
-  playerStage.position.set(0, 0, isBoxing ? -1.12 : 0);
-  playerStage.rotation.set(0, 0, 0);
-  playerStage.scale.setScalar(isBoxing ? 0.88 : 1);
-  playerStage.updateMatrixWorld(true);
   boxingOpponent.group.visible = isBoxing;
-  boxingOpponent.group.position.set(0, 0, isBoxing ? 1.22 : 0);
-  boxingOpponent.baseZ = isBoxing ? 1.22 : 1.15;
-  boxingOpponent.group.scale.setScalar(isBoxing ? 1.12 : 0.82);
-  $('view-game').dataset.game = isBoxing ? 'boxing-beat' : '';
+  $('boxing-forecast').hidden = !isBoxing;
+  $('boxing-panel').hidden = !isBoxing;
+
+  flyingGroup.visible = isFlying;
+  $('flying-hud').hidden = !isFlying;
+  $('flying-panel').hidden = !isFlying;
+
+  stretchingGroup.visible = isStretching;
+  $('stretching-hud').hidden = !isStretching;
+  $('stretching-panel').hidden = !isStretching;
+
+  $('view-game').dataset.game = isBoxing ? 'boxing-beat' : isFlying ? 'flying' : isStretching ? 'stretching' : '';
+  $('view-game').setAttribute('aria-label', `Active Game: ${activeGame.title}`);
+  $('active-game-title').textContent = activeGame.title;
+
   if (isBoxing) {
+    playerStage.position.set(0, 0, -1.12);
+    playerStage.rotation.set(0, 0, 0);
+    playerStage.scale.setScalar(0.88);
+    playerStage.updateMatrixWorld(true);
+    boxingOpponent.group.position.set(0, 0, 1.22);
+    boxingOpponent.baseZ = 1.22;
+    boxingOpponent.group.scale.setScalar(1.12);
     camera.fov = 38;
     camera.position.set(0, 6.7, -6.4);
     camera.lookAt(0, 1.25, 0);
     camera.updateProjectionMatrix();
+    if (robotWingsModel) robotWingsModel.visible = false;
+  } else if (isFlying) {
+    playerStage.position.set(0, 0, 0);
+    playerStage.rotation.set(0, Math.PI, 0);
+    playerStage.scale.setScalar(0.72);
+    playerStage.updateMatrixWorld(true);
+    camera.fov = 34;
+    camera.position.set(0, 2.25, 8.3);
+    camera.lookAt(0, 1.5, -4);
+    camera.updateProjectionMatrix();
+    if (robotWingsModel) {
+      robotWingsModel.visible = true;
+      robotWingsModel.position.copy(playerStage.position);
+      robotWingsModel.rotation.copy(playerStage.rotation);
+      robotWingsModel.scale.copy(playerStage.scale);
+    }
+    resetFlightCourse();
+    flightRace.reset();
+    renderFlightUI();
+  } else if (isStretching) {
+    playerStage.position.set(0, 0, 0);
+    playerStage.rotation.set(0, 0, 0);
+    playerStage.scale.setScalar(1);
+    playerStage.updateMatrixWorld(true);
+    camera.fov = 36;
+    camera.position.set(0, 3.8, 14.8);
+    camera.lookAt(0, 1.7, 0);
+    camera.updateProjectionMatrix();
+    if (robotWingsModel) robotWingsModel.visible = false;
+    initStretchingSection(0);
   } else {
+    playerStage.position.set(0, 0, 0);
+    playerStage.rotation.set(0, 0, 0);
+    playerStage.scale.setScalar(1);
+    playerStage.updateMatrixWorld(true);
     camera.fov = 30;
     applyCameraFraming(false);
+    if (robotWingsModel) robotWingsModel.visible = false;
   }
-  $('view-game').setAttribute('aria-label', `Active Game: ${activeGame.title}`);
-  $('active-game-title').textContent = activeGame.title;
-  $('boxing-forecast').hidden = !isBoxing;
-  $('boxing-panel').hidden = !isBoxing;
+
   if (!isBoxing) {
     boxingRound.reset();
     boxingPunchDetector.reset();
@@ -878,11 +1577,23 @@ function returnToCarousel() {
   playerHitSide = 0;
   boxingImpactAt = -Infinity;
   boxingImpact.visible = false;
+  flyingGroup.visible = false;
+  $('flying-hud').hidden = true;
+  $('flying-panel').hidden = true;
+  stretchingGroup.visible = false;
+  $('stretching-hud').hidden = true;
+  $('stretching-panel').hidden = true;
+  if (robotWingsModel) robotWingsModel.visible = false;
+  clearActiveProp();
+  flightRace.reset();
+  soundEffects.stopHoldHum();
   $('view-game').dataset.game = '';
   playerStage.position.set(0, 0, 0);
   playerStage.rotation.set(0, 0, 0);
   playerStage.scale.setScalar(1);
   playerStage.updateMatrixWorld(true);
+  camera.fov = 30;
+  applyCameraFraming(false);
   boxingOpponent.group.visible = false;
   boxingOpponent.group.position.set(0, 0, 0);
   boxingOpponent.baseZ = 1.15;
@@ -904,6 +1615,20 @@ function launchActiveGame() {
 $('btn-details-back').onclick = returnToCarousel;
 $('btn-start-game').onclick = launchActiveGame;
 $('btn-back-to-carousel').onclick = returnToCarousel;
+
+$('flying-start-round').onclick = () => {
+  soundEffects.playSelect();
+  flightRace.start(performance.now());
+  resetFlightCourse();
+  flightAltitude = 0.6;
+  flightVerticalVelocity = 0;
+  renderFlightUI();
+  status('Airborne! Flap arms downward to climb, lean to steer through rings.');
+};
+
+$('stretching-skip-btn').onclick = () => {
+  skipStretchingStep();
+};
 
 // ============================================================================
 // Carousel Component (Symmetrical: 1 Left, Center, 1 Right)
@@ -2223,6 +2948,10 @@ function animate(now) {
               const boxingState = boxingRound.tick(now, move);
               handleBoxingRoundEvents(boxingState, now);
               renderBoxingRound(boxingState);
+            } else if (currentView === 'game' && activeGame.gameType === 'flying') {
+              currentFlightInput = wingController.update(lm, now, frame.worldLandmarks);
+            } else if (currentView === 'game' && activeGame.gameType === 'stretching') {
+              updateStretchingMotion(lm, frame.worldLandmarks, dt, now);
             }
 
             // Hand cursors are only active and visible outside of active gameplay (Carousel & Details views)
@@ -2323,6 +3052,141 @@ function animate(now) {
     } else {
       rig.reset(1 - Math.exp(-7 * dt));
     }
+  }
+
+  const isFlyingGame = currentView === 'game' && activeGame.gameType === 'flying';
+  const isStretchingGame = currentView === 'game' && activeGame.gameType === 'stretching';
+
+  if (isFlyingGame) {
+    const starArray = flightStars.geometry.attributes.position.array;
+    const worldSpeed = flightRace.phase === 'flying' ? 4.6 : 0.7;
+    for (let index = 2; index < starArray.length; index += 3) {
+      starArray[index] += worldSpeed * dt;
+      if (starArray[index] > 5) starArray[index] = -34;
+    }
+    flightStars.geometry.attributes.position.needsUpdate = true;
+    flightClouds.forEach((cloud, index) => {
+      cloud.position.z += worldSpeed * 0.28 * dt;
+      cloud.rotation.y += dt * 0.02;
+      if (cloud.position.z > 6) cloud.position.z = -34 - index;
+    });
+
+    if (robotWingRig && robotWingsModel) {
+      robotWingRig.update(currentFlightInput, dt);
+      robotWingsModel.position.copy(playerStage.position);
+      robotWingsModel.rotation.copy(playerStage.rotation);
+      robotWingsModel.scale.copy(playerStage.scale);
+    }
+
+    const targetX = currentFlightInput.x * 1.55;
+    const movementAlpha = 1 - Math.exp(-5.5 * dt);
+    playerStage.position.x += (targetX - playerStage.position.x) * movementAlpha;
+
+    if (flightRace.phase === 'flying') {
+      if (currentFlightInput.flap) {
+        flightVerticalVelocity = Math.min(1.5, flightVerticalVelocity + 1.05);
+        lastFlapVisualAt = now;
+        currentFlightInput.flap = false;
+      }
+      if (currentFlightInput.gliding) {
+        flightVerticalVelocity += (-flightVerticalVelocity - 0.2) * Math.min(1, 2.2 * dt);
+      } else {
+        flightVerticalVelocity -= (1.2 + currentFlightInput.dive * 1.5) * dt;
+      }
+      flightAltitude += flightVerticalVelocity * dt;
+      if (flightAltitude <= -0.35) {
+        flightAltitude = -0.35;
+        flightVerticalVelocity = Math.max(0, flightVerticalVelocity);
+      } else if (flightAltitude >= 1.65) {
+        flightAltitude = 1.65;
+        flightVerticalVelocity = Math.min(0, flightVerticalVelocity);
+      }
+
+      // Course gate updates
+      for (const gate of flightGates) {
+        gate.position.z += 5.15 * dt;
+        gate.rotation.z += 0.28 * dt;
+        gate.userData.flash = Math.max(0, gate.userData.flash - dt * 2.8);
+        const pulse = 1 + Math.sin(now * 0.004 + gate.userData.sequence) * 0.035 + gate.userData.flash * 0.16;
+        gate.scale.setScalar(pulse);
+
+        if (!gate.userData.evaluated && gate.position.z >= 0) {
+          gate.userData.evaluated = true;
+          const pilotX = playerStage.position.x;
+          const pilotY = playerStage.position.y + 0.88;
+          const dist = Math.hypot(pilotX - gate.position.x, pilotY - gate.position.y);
+          const hit = dist < 0.65;
+          const pts = flightRace.recordRing(hit);
+          gate.userData.flash = 1;
+          gate.userData.ring.material.color.setHex(hit ? 0x84ffd7 : 0xff6375);
+          gate.userData.halo.material.color.setHex(hit ? 0x84ffd7 : 0xff6375);
+          if (hit) {
+            soundEffects.playRing();
+            status(`Ring cleared! +${pts} pts · ${flightRace.combo}x combo`);
+          } else {
+            status('Ring missed — align with the next ring!');
+          }
+        }
+
+        if (gate.position.z > 2.4) {
+          const tail = Math.min(...flightGates.map((g) => g.position.z));
+          placeFlightGate(gate, flightGateSequence, tail - 8.2);
+          flightGateSequence += 1;
+        }
+      }
+    } else {
+      flightAltitude += (0.6 - flightAltitude) * movementAlpha;
+      flightVerticalVelocity = 0;
+    }
+
+    playerStage.position.y += (flightAltitude - playerStage.position.y) * movementAlpha;
+    playerStage.rotation.z += (-currentFlightInput.x * 0.16 - playerStage.rotation.z) * movementAlpha;
+
+    engineGlow.position.set(playerStage.position.x, playerStage.position.y + 0.15, 0.1);
+    engineGlow.visible = flightRace.phase === 'flying';
+    const recentFlap = now - lastFlapVisualAt < 260;
+    const engineScale = recentFlap ? 1.35 + Math.sin(now * 0.02) * 0.16 : currentFlightInput.gliding ? 0.65 : 0.42;
+    engineGlow.scale.set(engineScale, engineScale * 2.7, engineScale);
+
+    const raceResult = flightRace.update(now);
+    if (raceResult) {
+      soundEffects.playComplete();
+      status(`Flight complete! Score: ${raceResult.score} (${raceResult.rings} rings).`);
+    }
+
+    renderFlightUI();
+  }
+
+  if (isStretchingGame) {
+    if (itemAuraGroup && itemAuraGroup.visible) {
+      gyro1.rotation.y += 1.8 * dt;
+      gyro1.rotation.x += 0.8 * dt;
+      gyro2.rotation.z += 1.4 * dt;
+      gyro2.rotation.y += 1.0 * dt;
+      dustPoints.rotation.y += 0.9 * dt;
+      const corePulse = 0.35 + Math.sin(now * 0.005) * 0.08;
+      itemCoreOrb.scale.setScalar(corePulse * 3);
+    }
+    if (socketBeacon && socketBeacon.visible) {
+      socketRing1.rotation.z += 2.2 * dt;
+      socketRing2.rotation.x += 1.6 * dt;
+    }
+    if (sparksLifetime > 0) {
+      sparksLifetime -= dt;
+      sparkMat.opacity = Math.max(0, sparksLifetime / 0.5);
+      const sPos = sparkGeo.attributes.position.array;
+      for (let i = 0; i < sparkCount; i++) {
+        sPos[i * 3] += sparkVelocities[i].x * dt;
+        sPos[i * 3 + 1] += sparkVelocities[i].y * dt;
+        sPos[i * 3 + 2] += sparkVelocities[i].z * dt;
+        sparkVelocities[i].y -= 9.8 * dt;
+      }
+      sparkGeo.attributes.position.needsUpdate = true;
+    }
+    peachClouds.forEach((c) => {
+      c.rotation.y += dt * 0.015;
+    });
+    renderStretchingUI();
   }
 
   // Render Three.js scene if in game view OR if welcome preview with Blue is active

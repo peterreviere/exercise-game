@@ -207,11 +207,44 @@
             </div>
             <div id="boxing-cue-list" class="boxing-cue-list" aria-live="off"></div>
           </section>
+
+          <!-- Flying Game HUD Overlay -->
+          <section id="flying-hud" class="flying-hud" aria-label="Flight status" hidden>
+            <div class="flying-stats-row">
+              <div class="stat-pill"><span>FLIGHT TIME</span><strong id="flying-time">01:00</strong></div>
+              <div class="stat-pill"><span>RINGS</span><strong id="flying-score">0</strong></div>
+              <div class="stat-pill"><span>COMBO</span><strong id="flying-combo">0x</strong></div>
+            </div>
+            <div class="flight-boost-bar"><i id="flight-boost-fill"></i></div>
+          </section>
+
+          <!-- Stretching Game HUD Overlay -->
+          <section id="stretching-hud" class="stretching-hud" aria-label="Stretching status" hidden>
+            <div class="stretching-mission-card">
+              <div class="mission-top">
+                <span id="stretching-chapter-badge" class="chapter-badge">SECTOR 01</span>
+                <span id="stretching-progress-text" class="progress-text">0 / 6 PARTS</span>
+              </div>
+              <strong id="stretching-chapter-title" class="chapter-title">BUILD THE WINGS</strong>
+              <div class="stretching-progress-bar"><i id="stretching-progress-fill"></i></div>
+            </div>
+            <div id="stretching-instruction" class="stretching-instruction-bar">
+              <b id="stretching-instruction-icon">↔</b>
+              <div>
+                <small id="stretching-instruction-badge">REQUIRED ACTION</small>
+                <strong id="stretching-instruction-text">Reach for the highlighted wing segment</strong>
+              </div>
+            </div>
+            <div id="stretching-hold" class="stretching-hold-bar hidden">
+              <div class="hold-meter"><i id="stretching-hold-fill"></i></div>
+              <span id="stretching-hold-text">Hold arms wide to lock wings</span>
+            </div>
+          </section>
         </section>
 
         <!-- Control Aside -->
         <aside class="game-aside">
-          <h2 class="aside-mirror-title">Watch Moshi Mirror Your Every Move!</h2>
+          <h2 class="aside-mirror-title" id="game-aside-title">Watch Moshi Mirror Your Every Move!</h2>
 
           <div class="camera">
             <canvas id="game-camera-canvas"></canvas>
@@ -230,6 +263,28 @@
             <button id="boxing-start-round" class="boxing-start-round" type="button">Start 45-second round</button>
             <div class="boxing-move-key" aria-label="Move guide">
               <span>Lean left / right</span><span>Extend one fist forward</span><span>Duck down</span><span>Raise both fists to block</span>
+            </div>
+          </section>
+
+          <!-- Flying Adventure Aside Panel -->
+          <section id="flying-panel" class="flying-panel" aria-label="Flight controls" hidden>
+            <div class="flight-score-row">
+              <div><span class="flight-stat-label">RINGS CLEARED</span><strong id="flying-panel-rings">0</strong></div>
+              <div><span class="flight-stat-label">BEST STREAK</span><strong id="flying-panel-best">0</strong></div>
+            </div>
+            <p id="flying-help">Flap your arms downward to gain altitude. Lean left/right to steer through the energy rings!</p>
+            <button id="flying-start-round" class="flying-start-round" type="button">Start Flight Run</button>
+            <div class="flying-move-key" aria-label="Flight guide">
+              <span>Flap arms to climb</span><span>Hold arms level to glide</span><span>Lean to bank left/right</span>
+            </div>
+          </section>
+
+          <!-- Stretching Adventure Aside Panel -->
+          <section id="stretching-panel" class="stretching-panel" aria-label="Stretching controls" hidden>
+            <p id="stretching-help">Move comfortably in your range of motion. Stand centered or seated.</p>
+            <button id="stretching-skip-btn" class="stretching-skip-btn" type="button">Skip current movement</button>
+            <div class="stretching-move-key" aria-label="Stretching guide">
+              <span>Reach left &amp; right</span><span>Extend arms wide</span><span>Lean torso</span><span>March in place</span>
             </div>
           </section>
 
